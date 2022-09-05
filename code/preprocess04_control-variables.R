@@ -18,9 +18,9 @@ library(lubridate)
 library(DBI)
 
 ## 预定义输入输出路径
-data_path <- "Government_Guide_Fund/data"
-output_path <- "Government_Guide_Fund/output"
-db_path <- "Government_Guide_Fund/data/GGF_project_store.sqlite"
+data_path <- "data"
+output_path <- "output"
+db_path <- "data/GGF_project_store.sqlite"
 
 ## 建立数据库连接
 con_sqlite <- dbConnect(RSQLite::SQLite(), db_path)
@@ -69,8 +69,10 @@ ten_holder_cnrds <- ten_holder_cnrds %>%
   group_by(Stkcd, Year) %>%
   summarise(TenHolder = sum(ShrRt)) %>%
   ungroup()
+
 equity_nature_cnrds <- equity_nature_cnrds %>%
   full_join(ten_holder_cnrds, by = c("Stkcd", "Year"))
+rm(ten_holder_cnrds)
 
 
 # 2. 审计特征 -----------------------------------------------------------------
@@ -180,7 +182,7 @@ region_fin %>% sample_n(20)
 
 
 # 7. 政府补助 -----------------------------------------------------------------
-### 数据来源：CSMAR公司研究 - 财务报表附注 - 政府补助
+### 数据来源：Wind政府补助
 ### 数据属性：2015-2021年度 4881个股票代码 9个变量
 ### 输出变量：政府补助Subsidies
 gov_subsidies_wind <- read_csv(file.path(data_path, "2022-08-23_gov-subsidies_Wind.csv"))
@@ -259,7 +261,7 @@ corp_strategy <- corp_strategy %>%
   select(Stkcd, Year, IndustryCode, Revenue, EmployerNum, RD, EMPS, SEXP, PPE)
 
 # 8.4 年度总得分函数
-source("Government_Guide_Fund/code/func_tools.R")
+source("code/func_tools.R")
 calcu_cg_score <- function(origin_data, target_year) {
   ### 准备数据
   data <- origin_data %>% 
@@ -356,7 +358,15 @@ rd_cost <- rd_cost %>%
 
 # 11. ESG评级 ---------------------------------------------------------------
 
-ESG_rating
+ESG_rating <- read_xlsx(file.path(data_path, "2022-09-05_huazheng-ESG.xlsx"))
+ESG_rating <- ESG_rating %>% 
+  select(-证券简称, -上市日期) %>% 
+  tidyr::pivot_longer(cols = ends_with("年"), names_to = "Year", values_to = "ESGRating") %>% 
+  rename(Stkcd = 证券代码) %>% 
+  mutate(Year = as.numeric(str_remove(Year, "年")) + 1,
+         Stkcd = str_remove(Stkcd, "(\\.SZ|\\.SH|\\.BJ)")) %>% 
+  filter(!is.na(ESGRating))
+ESG_rating %>% sample_n(20)
 
 
 # 11. 合并控制变量 --------------------------------------------------------------
@@ -384,20 +394,20 @@ ESG_rating
 list(
   listed_corp_info, equity_nature, auditor_info, insti_investor, 
   management_info, governance_structure, region_fin, 
-  gov_subsidies_wind, strategy_score, governance_score
+  gov_subsidies_wind, strategy_score, governance_score, rd_cost, ESG_rating
 ) %>% map(.f = \(x) count(x, Year))
 
 control_variables <- list(
     identifier_info, equity_nature, auditor_info, insti_investor, 
-    management_info, governance_structure, region_fin, 
-    gov_subsidies_wind, strategy_score, governance_score
+    management_info, governance_structure, region_fin, gov_subsidies_wind, 
+    strategy_score, governance_score, rd_cost, ESG_rating
   ) %>% 
   map(.f = \(x) filter(x, Year >= 2016)) %>% 
   reduce(.f = \(x, y) left_join(x, y, by = c("Stkcd", "Year"))) %>% 
   mutate(MHRatio = ManagerHold / TotalShares) %>% 
   select(Stkcd, Year, IndustryCode, ListingYear, EstablishDate, 
          Province, City, SOE, Big4, INS, SuperINS, RegionFin, 
-         Subsidies, StrategyScore, CG, MHRatio)
+         Subsidies, StrategyScore, CG, MHRatio, RDRatio, ESGRating)
 
 control_variables %>% 
   apply(MARGIN = 2, FUN = \(x) sum(is.na(x)))

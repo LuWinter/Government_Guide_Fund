@@ -1,5 +1,5 @@
 
-cd "~/Documents/R_Projects/Common/Government_Guide_Fund/output"
+cd "~/Documents/R_Projects/Government_Guide_Fund/output"
 
 * clear
 * use "merged_for_reg_reduced_19796.dta"
