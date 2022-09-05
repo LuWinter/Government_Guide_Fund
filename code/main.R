@@ -16,9 +16,9 @@ library(DBI)
 library(lubridate)
 
 ## 预定义输入输出路径
-data_path <- "Government_Guide_Fund/data"
-output_path <- "Government_Guide_Fund/output"
-db_path <- "Government_Guide_Fund/data/GGF_project_store.sqlite"
+data_path <- "data"
+output_path <- "output"
+db_path <- "data/GGF_project_store.sqlite"
 
 ## 建立数据库连接
 con_sqlite <- dbConnect(RSQLite::SQLite(), db_path)
@@ -43,7 +43,7 @@ merged_Big10SH_GGF_nodupl <- merged_Big10SH_GGF_nodupl %>%
 #   rename(Ret = adjRet, DR = adjDR)
 
 control_variables <- control_variables %>% 
-  filter(if_all(!matches("StrategyScore"), ~ !is.na(.x)))
+  filter(if_all(!matches("StrategyScore|ESGRating|RDRatio"), ~ !is.na(.x)))
 ### 除了StrategyScore外，有19244个无缺样本
 
 merged_for_reg <- accounting_conservatism %>% 
@@ -61,37 +61,36 @@ merged_for_reg <- merged_for_reg %>%
 merged_for_reg %>%   
   apply(MARGIN = 2, FUN = \(x) sum(is.na(x)))
 
-## 变量总计：34
+## 变量总计：35
 ## 标识（2）：Stkcd Year
 ## 会计稳健性（7）：G_Score C_Score EPS YearOpen YearClose DR Ret
 ## 引导基金（7）：GovFund GGFLevel GGFProvince IsFirstHold HoldNum HoldRatio HoldRank
-## 控制变量（15）：Size MB Lev RegionFin SOE Big4 INS SuperINS
-## MHRatio ListingYear GDP_p Subsidies StrategyScore CG RDRatio
+## 控制变量（16）：Size MB Lev RegionFin SOE Big4 INS SuperINS MHRatio 
+## ListingYear GDP_p Subsidies StrategyScore CG RDRatio ESGRating
 ## 固定效应（3）：IndustryCode Province City
 merged_for_reg <- merged_for_reg[, c("Stkcd", "Year", 
      "G_Score", "C_Score", "EPS", "YearOpen", "YearClose", "DR", "Ret",
      "GGF", "GGFLevel", "GGFProvince", "IsFirstHold", "HoldNum", "HoldRatio", "HoldRank",
      "Size", "MB", "Lev", "RegionFin", "SOE", "Big4", "INS", "SuperINS", "MHRatio", 
-     "ListingYear", "GDP_p", "Subsidies", "StrategyScore", "CG", "Age", "RDRatio",
+     "ListingYear", "GDP_p", "Subsidies", "StrategyScore", "CG", "Age", "RDRatio", "ESGRating", 
      "IndustryCode", "Province", "City")]
 
 merged_for_reg_reduced <- merged_for_reg %>% 
   group_by(Stkcd) %>% 
-  filter(n() > 3) %>% 
+  filter(n() > 2) %>% 
   ungroup()
 
-saveRDS(merged_for_reg, file = paste0("merged-for-reg_", today(), ".rds"))
-saveRDS(merged_for_reg_reduced, file = paste0("merged-for-reg-reduced_", today(), ".rds"))
+# saveRDS(merged_for_reg, file = paste0("merged-for-reg_", today(), ".rds"))
+# saveRDS(merged_for_reg_reduced, file = paste0("merged-for-reg-reduced_", today(), ".rds"))
 
 
 # 2. 模型检验 -----------------------------------------------------------------
 
-stata(src = "Government_Guide_Fund/code/analysis02_basic-test.do",
-      data.in = filter(merged_for_reg_reduced, Year >= 2017))
+stata(src = "code/analysis02_basic-test.do",
+      data.in = filter(merged_for_reg, Year >= 2017))
 
-stata(src = "Government_Guide_Fund/code/analysis03_mechanism-test.do",
-      data.in = filter(merged_for_reg_reduced, Year >= 2017))
+stata(src = "code/analysis03_mechanism-test.do",
+      data.in = filter(merged_for_reg, Year >= 2017))
 
 dbDisconnect(con_sqlite)
-
 

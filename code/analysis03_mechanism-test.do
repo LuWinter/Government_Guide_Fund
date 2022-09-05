@@ -1,5 +1,5 @@
 
-cd "~/Documents/R_Projects/Common/Government_Guide_Fund/output"
+cd "~/Documents/R_Projects/Government_Guide_Fund/output"
 
 * clear
 * use "merged_for_reg_reduced_19796.dta"
@@ -447,6 +447,72 @@ quietly estadd local fe_province "YES", replace
 quietly estadd local fe_indu_year "YES", replace
 quietly estadd local fe_prov_year "YES", replace
 
+
+/********************************* ESG Group ******************************/
+gen ESG_d = 0 if ESGRating != "NA"
+replace ESG_d = 1 if ESGRating == "AAA" | ESGRating == "AA" | ESGRating == "A"
+
+display _N
+tab ESG_d GGF
+
+#delimit ;
+eststo high_esg:                                
+	reghdfe EPS_P $base_reg $GGF_reg   	
+    if ESG_d == 1, 				
+	absorb($common_fe)				   	
+    ;
+#delimit cr
+quietly estadd local control "NO", replace
+quietly estadd local fe_industry "YES", replace
+quietly estadd local fe_year "YES", replace
+quietly estadd local fe_province "YES", replace
+quietly estadd local fe_indu_year "NO", replace
+quietly estadd local fe_prov_year "NO", replace
+
+
+#delimit ;
+eststo low_esg:   
+	reghdfe EPS_P $base_reg $GGF_reg 
+    if ESG_d == 0, 			   	
+	absorb($common_fe) 				  
+    ;
+#delimit cr
+quietly estadd local control "NO", replace
+quietly estadd local fe_industry "YES", replace
+quietly estadd local fe_year "YES", replace
+quietly estadd local fe_province "YES", replace
+quietly estadd local fe_indu_year "NO", replace
+quietly estadd local fe_prov_year "NO", replace
+
+#delimit ;
+eststo high_esg_ct:
+	quietly reghdfe EPS_P $base_reg $GGF_reg	
+	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg  
+    if ESG_d == 1, 				
+	absorb($common_fe $high_fe)			
+    ;
+#delimit cr
+quietly estadd local control "YES", replace
+quietly estadd local fe_industry "YES", replace
+quietly estadd local fe_year "YES", replace
+quietly estadd local fe_province "YES", replace
+quietly estadd local fe_indu_year "YES", replace
+quietly estadd local fe_prov_year "YES", replace
+
+#delimit ;
+eststo low_esg_ct:                         
+	quietly reghdfe EPS_P $base_reg $GGF_reg  	
+	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg
+    if ESG_d == 0, 				
+	absorb($common_fe $high_fe)			
+    ;
+#delimit cr
+quietly estadd local control "YES", replace
+quietly estadd local fe_industry "YES", replace
+quietly estadd local fe_year "YES", replace
+quietly estadd local fe_province "YES", replace
+quietly estadd local fe_indu_year "YES", replace
+quietly estadd local fe_prov_year "YES", replace
                                  
                               
 /********************************* Output Result ******************************/
@@ -518,3 +584,16 @@ esttab high_stra low_stra high_stra_ct low_stra_ct
 			"Industry ✖ Year FE" "Province ✖ Year FE" "Obs" "adjusted-R2"))
     mtitle("High Strategy" "Low Strategy" "High Strategy (Control)" "Low Strategy (Control)");
 #delimit cr	
+
+
+#delimit ;         
+esttab high_esg low_esg high_esg_ct low_esg_ct	
+    using esg_group_regression.rtf  ,                                	
+    replace label nogap star(* 0.10 ** 0.05 *** 0.01) 
+	keep($var_list) varwidth(15) b t(4) ar2(4) 
+	s(control fe_industry fe_year fe_province fe_indu_year fe_prov_year N r2_a, 
+	  label("Control Variables" "Industry FE" "Year FE" "Province FE" 
+			"Industry ✖ Year FE" "Province ✖ Year FE" "Obs" "adjusted-R2"))
+    mtitle("High ESG" "Low ESG" "High ESG (Control)" "Low ESG (Control)");
+#delimit cr	
+
