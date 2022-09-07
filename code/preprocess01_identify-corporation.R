@@ -1,4 +1,10 @@
 
+##############################################################
+# Programmer: Lu Winter
+# Date Created: 2022-09-05 
+# Task: Identify every corporate-years of the sample
+##############################################################
+
 ## load packages
 library(readxl)
 library(dplyr)
