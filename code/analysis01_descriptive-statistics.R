@@ -1,4 +1,14 @@
 
+##############################################################
+# Programmer: Lu Winter
+# Date Created: 2022-08-28
+# Task: Perform descriptive statistics
+##############################################################
+
+
+# 0. Initial Setup --------------------------------------------------------
+
+## 加载R包
 library(dplyr)
 library(echarts4r)
 library(stringr)
@@ -8,277 +18,221 @@ library(readr)
 library(purrr)
 library(RSQLite)
 
+## 预定义输入输出路径
+data_path <- "data"
+output_path <- "output"
+db_path <- "data/GGF_project_store.sqlite"
 
-# 1. Read data ------------------------------------------------------------
+## 建立数据库连接
+con_sqlite <- dbConnect(RSQLite::SQLite(), db_path)
+dbListTables(con_sqlite)
 
-data_path <- "Government_Guide_Fund/data/"
 
-# 导入已合并的上市公司
-merged_result <- read_rds("Government_Guide_Fund/output/merged_Big10SH_GGF.rds")
-merged_result <- merged_result %>% 
-  filter(flag == 1)
-merged_result <- merged_result[, -c(20, 21)]
+# 1. Load data ------------------------------------------------------------
 
-# 导入政府引导基金
-gov_fund_little <- read_csv(file = paste0(data_path, "Gov_Guide_Fund/gov_guide_fund_little.csv"))
-gov_fund_little <- gov_fund_little %>%
-  mutate(`基金全称2` = str_remove_all(`基金全称`, "（.{4}）$"))
-gov_fund_full <- read_csv(file = paste0(data_path, "Gov_Guide_Fund/gov_guide_fund_full.csv"))
+## 导入上市公司股东与引导基金匹配结果
+merged_Big10SH_GGF_nodupl <- dbReadTable(conn = con_sqlite, 
+                                         name = "merged_Big10SH_GGF_nodupl")
 
-# 导入上市公司信息
-listed_corporate_info <- read_xlsx(path = paste0(data_path, "Listed_Corporate_Info/STK_LISTEDCOINFOANL.xlsx"))
+## 导入政府引导基金
+GGF_list_all <- dbReadTable(conn = con_sqlite, 
+                            name = "GGF_list_all")
+
+## 导入上市公司信息
+identifier_info <- dbReadTable(conn = con_sqlite,
+                               name = "identifier_info")
+
+## 筛选匹配样本
+merged_GGF_identifier <- merged_Big10SH_GGF_nodupl %>% 
+  left_join(identifier_info, by = c("Stkcd", "Year")) %>% 
+  filter(!is.na(ShortName))
+
+## 导入最终回归样本
+final_sample <- read_rds(file.path(output_path, "old/merged-for-reg-reduced_2022-09-05.rds"))
+final_sample <- filter(final_sample, GGF == 1)
 
 
 # 2. Basic statistics -----------------------------------------------------
 
-# 匹配样本的年度分布
-merged_result %>% 
-  count(匹配年份 = year(Reptdt)) %>% 
-  mutate(匹配年份 = factor(匹配年份)) %>% 
-  e_charts(x = `匹配年份`) %>% 
-  e_bar(n, name = "匹配样本量")
+## 匹配样本的年度分布
+merged_Big10SH_GGF_nodupl%>% 
+  count(Year) %>% 
+  filter(Year >= 2010) %>% 
+  mutate(Year = factor(Year)) %>% 
+  e_charts(x = `Year`) %>% 
+  e_bar(serie = n, name = "匹配样本量", legend = FALSE,
+        itemStyle = htmlwidgets::JS("{normal: 
+            {label : {show: true, fontSize: 14, position: 'outside'}}
+        }")) %>% 
+  e_title("引导基金持股的年份分布")
 
-# 引导基金的持股时间
-merged_result %>% 
-  count(股东全称3, Stkcd, name = "持股时间") %>% 
+## 引导基金的持股时间
+merged_Big10SH_GGF_nodupl %>% 
+  count(GGFName, Stkcd, name = "持股时间") %>% 
   count(持股时间) %>% 
-  mutate(持股时间 = paste0(持股时间, "年")) %>% 
+  mutate(持股时间 = paste0(持股时间, "年", " (", n, ")")) %>% 
   e_charts(x = `持股时间`) %>% 
-  e_pie(n, name = "年限", legend = FALSE) %>% 
+  e_pie(serie = n, name = "年限", legend = FALSE) %>% 
   e_title("引导基金的持股时间")
 
-# 引导基金首次持股距IPO时长
-ipo_time <- listed_corporate_info %>% 
-  select(Symbol, LISTINGDATE) %>% 
-  mutate(Listed_year = year(LISTINGDATE)) %>% 
-  distinct()
-merged_result %>% 
-  group_by(Stkcd, 股东全称3) %>% 
-  summarise(first_hold = min(Reptdt)) %>% 
+## 引导基金首次持股距IPO时长
+merged_Big10SH_GGF_nodupl %>% 
+  group_by(Stkcd, GGFName) %>% 
+  summarise(first_hold = min(Year)) %>% 
   ungroup() %>% 
-  left_join(ipo_time, by = c("Stkcd" = "Symbol")) %>% 
-  mutate(time_interval = as.integer(date(first_hold) - date(LISTINGDATE))) %>% 
-  count(时间间隔 = ceiling(time_interval / 365)) %>% 
+  left_join(identifier_info, by = c("Stkcd", "first_hold" = "Year")) %>% 
+  filter(!is.na(ShortName)) %>% 
+  mutate(time_interval = as.integer(first_hold - ListingYear)) %>%  
+  count(时间间隔 = time_interval) %>% 
   mutate(时长段 = ifelse(时间间隔 <= 1, "不超过1年", 
                   ifelse(时间间隔 <= 5, "2~5年",
                   ifelse(时间间隔 <= 10, "6～10年", 
                   "10年以上")))) %>% 
   group_by(时长段) %>%
   summarise(n = sum(n)) %>% 
+  mutate(时长段 = paste0(时长段, " (", n, ")")) %>% 
   e_charts(x = `时长段`) %>% 
   e_pie(n, legend = FALSE) %>% 
   e_title("引导基金首次持股距IPO时长")
 
+
+listed_corp_info <- read_xlsx(file.path(data_path, "2022-08-04_corporate-info.xlsx"))
+listed_corp_info <- mutate(listed_corp_info, Year = year(EndDate))
+
 # 匹配样本的行业分布
-# merged_result %>% 
-#   filter(flag == 1) %>% 
-#   count(Stkcd, Year = year(Reptdt)) %>% 
-#   left_join(y = Listed_Corporate_Info[, c(3, 4, 6, 7, 38)], 
-#             by = c("Stkcd" = "Symbol", "Year")) %>% 
-#   count(Industry = str_sub(IndustryCode, 1, 1)) %>% 
-#   left_join(y = Industry_Code[, c(1, 3)], by = c("Industry" = "行业编码")) %>% 
-#   filter(n >= 5) %>% 
-#   e_charts(x = `行业中文名称`) %>% 
-#   e_pie(n, name = "数量")
+industry_distribution <- merged_Big10SH_GGF_nodupl %>% 
+  count(Stkcd, Year) %>%
+  left_join(y = listed_corp_info[, c("Symbol", "IndustryName", "Year")],
+            by = c("Stkcd" = "Symbol", "Year")) %>% 
+  count(IndustryName) %>% 
+  filter(n >= 20) %>% 
+  ungroup()
+other_industry_obs <- nrow(merged_Big10SH_GGF_nodupl) - sum(industry_distribution$n)
+industry_distribution %>% 
+  arrange(-n) %>% 
+  add_row(IndustryName = "其他行业", n = other_industry_obs) %>% 
+  mutate(IndustryName = paste0(IndustryName, " (", n, ")")) %>% 
+  e_charts(x = IndustryName) %>%
+  e_pie(serie = n, name = "数量", legend = FALSE)
 
 
-# 3. 引导基金行政级别 -------------------------------------------------------------
+# 3. GGF Level ----------------------------------------------------------------
 
 # 与基金持股时间
-merged_result %>% 
-  count(股东全称3, Stkcd, name = "持股时间") %>% 
-  left_join(y = gov_fund_little[, c(23, 7:9, 16)], 
-            by = c("股东全称3" = "基金全称2")) %>% 
-  filter(!is.na(基金级别), 基金级别 != "--") %>% 
-  count(基金级别, 持股时间) %>% 
+merged_Big10SH_GGF_nodupl %>% 
+  group_by(Stkcd) %>% 
+  mutate(持股时间 = n()) %>% 
+  ungroup() %>% 
+  distinct(Stkcd, GGFName, .keep_all = TRUE) %>% 
+  filter(GGFLevel != "--") %>% 
+  count(GGFLevel, 持股时间) %>% 
   mutate(时长段 = ifelse(持股时间 <= 1, "1年", 
                   ifelse(持股时间 <= 3, "2~3年",
                   ifelse(持股时间 <= 5, "4～5年", "5年以上")))) %>% 
-  group_by(基金级别, 时长段) %>% 
+  group_by(GGFLevel, 时长段)  %>% 
   summarise(n = sum(n)) %>% 
   mutate(ratio = paste0(round(n / sum(n) * 100, 1) , "%"))
 
 # 与首次持股距IPO时长
-merged_result %>% 
-  group_by(Stkcd, 股东全称3) %>% 
-  summarise(first_hold = min(Reptdt)) %>% 
+ipo_time <- listed_corp_info %>% 
+  mutate(ListingYear = year(LISTINGDATE)) %>% 
+  select(Stkcd = Symbol, ListingYear) %>% 
+  distinct(Stkcd, .keep_all = TRUE)
+
+merged_Big10SH_GGF_nodupl %>% 
+  group_by(Stkcd) %>% 
+  mutate(first_hold = min(Year)) %>% 
   ungroup() %>% 
-  left_join(ipo_time, by = c("Stkcd" = "Symbol")) %>% 
-  mutate(time_interval = as.integer(date(first_hold) - date(LISTINGDATE))) %>% 
-  mutate(时间间隔 = ceiling(time_interval / 365)) %>% 
+  distinct(Stkcd, GGFName, .keep_all = TRUE) %>% 
+  left_join(ipo_time, by = c("Stkcd")) %>% 
+  # filter(!is.na(ShortName)) %>%
+  mutate(time_interval = as.integer(first_hold - ListingYear)) %>% 
+  count(时间间隔 = time_interval, GGFLevel) %>% 
   mutate(时长段 = ifelse(时间间隔 <= 1, "不超过1年", 
                   ifelse(时间间隔 <= 5, "2~5年",
                   ifelse(时间间隔 <= 10, "6～10年", "10年以上")))) %>% 
-  left_join(y = gov_fund_little[, c(23, 7:9, 16)], 
-            by = c("股东全称3" = "基金全称2")) %>% 
-  filter(!is.na(基金级别), 基金级别 != "--") %>% 
-  count(基金级别, 时长段) %>% 
-  group_by(基金级别) %>% 
-  mutate(ratio = paste0(round(n / sum(n) * 100, 1) , "%"))
-
-# 与持股高新技术企业
-listed_corporate_industry <- listed_corporate_info %>% 
-  select(Symbol, EndDate, IndustryCode) %>% 
-  mutate(Year = year(EndDate))
-merged_result %>% 
-  mutate(Year = year(Reptdt)) %>% 
-  left_join(y = listed_corporate_industry, by = c("Stkcd" = "Symbol", "Year")) %>% 
-  mutate(high_tech = if_else(IndustryCode == "C27" | IndustryCode == "C37" |
-                             IndustryCode == "C39" | IndustryCode == "C40", 1,
-                     if_else(str_sub(IndustryCode, 1, 1) == "I" | 
-                             str_sub(IndustryCode, 1, 1) == "M", 1, 0))) %>% 
-  left_join(y = gov_fund_little[, c(23, 7:9, 16)], 
-            by = c("股东全称3" = "基金全称2")) %>% 
-  filter(!is.na(基金级别), 基金级别 != "--") %>% 
-  count(基金级别, high_tech) %>% 
-  group_by(基金级别) %>% 
-  mutate(ratio = paste0(round(n / sum(n) * 100, 1) , "%"))
-listed_corporate_info %>% 
-  mutate(high_tech = if_else(IndustryCode == "C27" | IndustryCode == "C37" |
-                             IndustryCode == "C39" | IndustryCode == "C40", 1,
-                     if_else(str_sub(IndustryCode, 1, 1) == "I" | 
-                             str_sub(IndustryCode, 1, 1) == "M", 1, 0))) %>% 
-  count(year(EndDate), high_tech)
-
-
-# 4. 引导基金出资背景 -------------------------------------------------------------
-
-# 计算出资背景
-gov_fund_full <- gov_fund_full %>% 
-  mutate(`出资人是否国资2` = ifelse(`出资人数量` == 1, "是", `出资人是否国资`)) %>% 
-  mutate(`出资人是否国资2` = ifelse(`出资人是否国资2` == "是", 1, 0)) %>% 
-  group_by(`基金简称`) %>% 
-  mutate(`非国资出资人数量` = `出资人数量` - sum(`出资人是否国资2`))
-gov_fund_little <- bind_cols(
-  gov_fund_little, 
-  distinct(gov_fund_full[, c(1, 9, 7)])[, 2:3]) %>% 
-  mutate(包含非国资出资 = ifelse(非国资出资人数量 > 0, 1, 0))
-merged_result %>% 
-  mutate(Year = year(Reptdt)) %>% 
-  left_join(y = listed_corporate_industry, by = c("Stkcd" = "Symbol", "Year")) %>% 
-  mutate(high_tech = if_else(IndustryCode == "C27" | IndustryCode == "C37" |
-                             IndustryCode == "C39" | IndustryCode == "C40", 1,
-                     if_else(str_sub(IndustryCode, 1, 1) == "I" | 
-                             str_sub(IndustryCode, 1, 1) == "M", 1, 0))) %>% 
-  left_join(y = gov_fund_little[, c(23, 7:9, 26)], 
-            by = c("股东全称3" = "基金全称2")) %>% 
-  filter(!is.na(包含非国资出资)) %>% 
-  count(包含非国资出资, high_tech) %>% 
-  group_by(包含非国资出资) %>% 
-  mutate(ratio = paste0(round(n / sum(n) * 100, 1) , "%"))
-
-# 与基金持股时间
-merged_result %>% 
-  count(股东全称3, Stkcd, name = "持股时间") %>% 
-  left_join(y = gov_fund_little[, c(23, 7:9, 26)], 
-            by = c("股东全称3" = "基金全称2")) %>% 
-  filter(!is.na(包含非国资出资)) %>% 
-  count(包含非国资出资, 持股时间) %>% 
-  mutate(持股时长 = ifelse(持股时间 <= 1, "1年", 
-                    ifelse(持股时间 <= 3, "2~3年",
-                    ifelse(持股时间 <= 5, "4～5年", "5年以上")))) %>% 
-  group_by(包含非国资出资, 持股时长) %>% 
+  group_by(GGFLevel, 时长段) %>%
   summarise(n = sum(n)) %>% 
-  mutate(ratio = paste0(round(n / sum(n) * 100, 1) , "%"))
-
-# 与首次持股距IPO时间
-merged_result %>% 
-  group_by(Stkcd, 股东全称3) %>% 
-  summarise(first_hold = min(Reptdt)) %>% 
-  ungroup() %>% 
-  left_join(ipo_time, by = c("Stkcd" = "Symbol")) %>% 
-  mutate(time_interval = as.integer(date(first_hold) - date(LISTINGDATE))) %>% 
-  mutate(时间间隔 = ceiling(time_interval / 365)) %>% 
-  mutate(时长段 = ifelse(时间间隔 <= 1, "不超过1年", 
-                  ifelse(时间间隔 <= 5, "2~5年",
-                  ifelse(时间间隔 <= 10, "6～10年", "10年以上")))) %>% 
-  left_join(y = gov_fund_little[, c(23, 7:9, 26)], 
-            by = c("股东全称3" = "基金全称2")) %>% 
-  filter(!is.na(包含非国资出资)) %>% 
-  count(包含非国资出资, 时长段) %>% 
-  group_by(包含非国资出资) %>% 
+  filter(GGFLevel != "--") %>%
+  group_by(GGFLevel) %>% 
   mutate(ratio = paste0(round(n / sum(n) * 100, 1) , "%"))
 
 # 与持股高新技术企业
-merged_result_add <- merged_result %>% 
-  group_by(股东全称3, Stkcd) %>% 
-  mutate(持股时间 = n(), 
-         first_hold = min(Reptdt)) %>% 
-  ungroup() %>% 
-  left_join(ipo_time, by = c("Stkcd" = "Symbol")) %>% 
-  mutate(time_interval = as.integer(date(first_hold) - date(LISTINGDATE))) %>% 
-  mutate(时间间隔 = ceiling(time_interval / 365)) %>% 
-  select(股东全称3, Stkcd, Reptdt, 持股时间, 时间间隔) %>% 
-  mutate(Year = year(Reptdt)) %>% 
-  left_join(y = listed_corporate_industry[, c(1, 3, 4)], 
-            by = c("Stkcd" = "Symbol", "Year")) %>% 
+listed_corp_industry <- listed_corp_info %>%
+  mutate(Year = year(EndDate)) %>% 
+  select(Stkcd = Symbol, Year, IndustryCode)
+
+merged_Big10SH_GGF_nodupl %>% 
+  distinct(Stkcd, GGFName, .keep_all = TRUE) %>% 
+  left_join(y = listed_corp_industry, by = c("Stkcd", "Year")) %>% 
   mutate(high_tech = if_else(IndustryCode == "C27" | IndustryCode == "C37" |
                              IndustryCode == "C39" | IndustryCode == "C40", 1,
                      if_else(str_sub(IndustryCode, 1, 1) == "I" | 
                              str_sub(IndustryCode, 1, 1) == "M", 1, 0))) %>% 
-  select(-Reptdt, -IndustryCode) %>% 
-  distinct(股东全称3, Stkcd, .keep_all = TRUE) %>% 
-  left_join(y = gov_fund_little[, c(23, 7:9, 26)], 
-            by = c("股东全称3" = "基金全称2"))
+  filter(GGFLevel != "--") %>% 
+  count(GGFLevel, high_tech) %>% 
+  group_by(GGFLevel) %>% 
+  mutate(ratio = paste0(round(n / sum(n) * 100, 1) , "%"))
+
+listed_corp_info %>% 
+  mutate(high_tech = if_else(IndustryCode == "C27" | IndustryCode == "C37" |
+                             IndustryCode == "C39" | IndustryCode == "C40", 1,
+                     if_else(str_sub(IndustryCode, 1, 1) == "I" | 
+                             str_sub(IndustryCode, 1, 1) == "M", 1, 0))) %>% 
+  filter(!is.na(high_tech)) %>% 
+  count(Year = year(EndDate), high_tech) %>% 
+  filter(Year >= 2016)
 
 
-# 5. t检验与描述性统计 ------------------------------------------------------------
+# 4. t-test --------------------------------------------------------------------
 
-# 计算基金注册省份
-founded_province <- merged_result_add$注册地区 %>% 
-  str_split(pattern = "\\|") %>% 
-  map(2)
-founded_province_vec <- c()
-for(i in 1:length(founded_province)) {
-  if (!is.null(founded_province[[i]])) {
-    founded_province_vec <- c(founded_province_vec, founded_province[[i]])
-  } else {
-    founded_province_vec <- c(founded_province_vec, NA)
+# 与持股高新技术企业
+merged_GGF_corp <- merged_Big10SH_GGF_nodupl %>%
+  group_by(Stkcd) %>%
+  mutate(持股时间 = n(),
+         first_hold = min(Year)) %>%
+  ungroup() %>% 
+  left_join(ipo_time, by = c("Stkcd")) %>%
+  mutate(time_interval = as.integer(first_hold - ListingYear)) %>%
+  mutate(时间间隔 = time_interval) %>% 
+  select(Stkcd, Year, GGFName, GGFLevel, GGFProvince, 持股时间, 时间间隔) %>% 
+  left_join(y = listed_corp_industry,
+            by = c("Stkcd", "Year")) %>%
+  mutate(high_tech = if_else(IndustryCode == "C27" | IndustryCode == "C37" |
+                             IndustryCode == "C39" | IndustryCode == "C40", 1,
+                     if_else(str_sub(IndustryCode, 1, 1) == "I" |
+                             str_sub(IndustryCode, 1, 1) == "M", 1, 0))) %>% 
+  # distinct(GGFName, Stkcd, .keep_all = TRUE) %>% 
+  select(-Year, -IndustryCode) %>% 
+  mutate(国家级基金 = ifelse(GGFLevel == "国家级", 1, 
+                      ifelse(GGFLevel == "--", NA, 0)),
+         发达地区基金 = ifelse(GGFProvince == "北京市" | 
+                               GGFProvince == "上海市" |
+                               GGFProvince == "广东省", 1, 0))
+
+## 变量描述性统计与t检验
+t.test(merged_GGF_corp$持股时间, merged_GGF_corp$国家级基金)
+t.test(merged_GGF_corp$持股时间, merged_GGF_corp$发达地区基金)
+
+t.test(merged_GGF_corp$时间间隔, merged_GGF_corp$国家级基金)
+t.test(merged_GGF_corp$时间间隔, merged_GGF_corp$发达地区基金)
+
+t.test(merged_GGF_corp$high_tech, merged_GGF_corp$国家级基金)
+t.test(merged_GGF_corp$high_tech, merged_GGF_corp$发达地区基金)
+
+c("国家级基金", "发达地区基金") %>% map(.f = function(x) {
+  merged_GGF_corp %>% 
+    filter(!is.na(eval(parse(text = x)))) %>% 
+    group_by(Group = eval(parse(text = x))) %>% 
+    summarise(      n         = n(),
+                    mean_hold_time  = mean(持股时间),
+                    sd_hold_time    = sd(持股时间),
+                    mean_first_hold = mean(时间间隔),
+                    sd_first_hold   = sd(时间间隔),
+                    mean_high_tech  = mean(high_tech),
+                    sd_high_tech    = sd(high_tech)) %>% 
+    t()
   }
-}
-merged_result_add$注册地区 <- founded_province_vec
-rm(founded_province, founded_province_vec)
-
-# 整理合并加工变量并备份
-merged_result_add <- merged_result_add %>% 
-  mutate(国家级基金 = ifelse(基金级别 == "国家级", 1, 
-                             ifelse(基金级别 == "--", NA, 0)),
-         产业基金 = ifelse(基金分类 == "产业基金", 1,
-                           ifelse(基金分类 == "--", NA, 0)),
-         发达地区基金 = ifelse(注册地区 == "北京市" | 注册地区 == "上海市" |
-                               注册地区 == "广东省", 1, 0)) %>% 
-  select(-基金级别, -基金分类, -注册地区)
-merged_result_add <- merged_result_add[, c(2, 5, 1, 3:4, 6:10)]
-colnames(merged_result_add)[3] <- "引导基金全称"
-# write_rds(x = merged_result_add, file = "Government_Guide_Fund/output/merged_result_add_370.rds")
-
-# 变量描述性统计与t检验
-t.test(merged_result_add$持股时间, merged_result_add$国家级基金)
-t.test(merged_result_add$持股时间, merged_result_add$包含非国资出资)
-t.test(merged_result_add$持股时间, merged_result_add$发达地区基金)
-t.test(merged_result_add$持股时间, merged_result_add$产业基金)
-
-t.test(merged_result_add$时间间隔, merged_result_add$国家级基金)
-t.test(merged_result_add$时间间隔, merged_result_add$包含非国资出资)
-t.test(merged_result_add$时间间隔, merged_result_add$发达地区基金)
-t.test(merged_result_add$时间间隔, merged_result_add$产业基金)
-
-t.test(merged_result_add$high_tech, merged_result_add$国家级基金)
-t.test(merged_result_add$high_tech, merged_result_add$包含非国资出资)
-t.test(merged_result_add$high_tech, merged_result_add$发达地区基金)
-t.test(merged_result_add$high_tech, merged_result_add$产业基金)
-
-merged_result_add %>% 
-  group_by(发达地区基金) %>% 
-  summarise(      n         = n(),
-            mean_hold_time  = mean(持股时间),
-            sd_hold_time    = sd(持股时间),
-            mean_first_hold = mean(时间间隔),
-            sd_first_hold   = sd(时间间隔),
-            mean_high_tech  = mean(high_tech),
-            sd_high_tech    = sd(high_tech))
-
-
-
+)
 
 
