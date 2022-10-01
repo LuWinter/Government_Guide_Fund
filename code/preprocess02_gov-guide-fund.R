@@ -19,9 +19,9 @@ library(purrr)
 library(DBI)
 
 ## 预定义输入输出路径
-data_path <- "Government_Guide_Fund/data"
-output_path <- "Government_Guide_Fund/output"
-db_path <- "Government_Guide_Fund/data/GGF_project_store.sqlite"
+data_path <- "data"
+output_path <- "output"
+db_path <- "data/GGF_project_store.sqlite"
 
 ## 建立数据库连接
 con_sqlite <- dbConnect(RSQLite::SQLite(), db_path)
@@ -141,10 +141,12 @@ Big10_Shareholders %>%
 # 3.2 进一步整理十大股东名称
 ### 1.拆分连字符  2.去除括号
 clean_shareholder_name <- function(old_name) {
-  if (str_detect(old_name, "-") & !str_detect(old_name, "^[a-zA-Z]")) {
+  if (str_detect(old_name, "[-－]") & !str_detect(old_name, "^[a-zA-Z]")) {
     new_name = tail(
       as.vector(
-        str_split(old_name, "-", simplify = TRUE)), 1)
+        str_split(old_name, "[-－]", simplify = TRUE)
+      ), 
+    1)
   } else {
     new_name = old_name
   }
@@ -167,29 +169,33 @@ colnames(GGF_list_add)
 GGF_list_add <- GGF_list_add %>% 
   filter(str_detect(基金全称, "基金"))
 ### 由于在Excel上进行增补数据的更新，所以更新后同步到数据库
-# dbWriteTable(conn = con_sqlite, 
-#              name = "GGF_list_add", 
-#              value = GGF_list_add,
-#              overwrite = TRUE)
+dbWriteTable(
+  conn = con_sqlite,
+  name = "GGF_list_add",
+  value = GGF_list_add,
+  overwrite = TRUE
+)
 
 # 3.5 合并全部引导基金数据
 GGF_list_all <- bind_rows(
   select(GGF_list_qingke, 基金全称 = 基金全称2, 注册省份, 基金级别),
   select(GGF_list_add, 基金全称, 注册省份, 基金级别)
 )
-GGF_list_all$GovFund <- 1
+GGF_list_all$GGF <- 1
 GGF_list_all <- distinct(GGF_list_all, 基金全称, .keep_all = TRUE)
-# dbWriteTable(conn = con_sqlite, 
-#              name = "GGF_list_all", 
-#              value = GGF_list_all,
-#              overwrite = TRUE)
+dbWriteTable(
+  conn = con_sqlite,
+  name = "GGF_list_all",
+  value = GGF_list_all,
+  overwrite = TRUE
+)
 
 # 3.6 合并引导基金与十大股东数据
 merged_SH_GGF <- Big10_Shareholders %>% 
   left_join(GGF_list_all, 
             by = c("股东全称3" = "基金全称"))
 merged_SH_GGF %>% 
-  filter(GovFund == 1) %>% 
+  filter(GGF == 1) %>% 
   count(年度 = year(Reptdt), name = "匹配样本量")
 ### 使用2022-08-11增补的数据: 2017～2021得到 99 + 111 + 130 + 177 + 222 = 739
 ### 使用2022-08-28增补的数据: 2017～2021得到 145 + 167 + 204 + 268 + 315 = 1099
@@ -200,7 +206,7 @@ merged_SH_GGF %>%
 check_not_merged <- function(data = merged_SH_GGF, keyword) {
   data[str_detect(data$股东全称3, keyword) &
        month(data$Reptdt) == 12 &
-       is.na(data$GovFund) == TRUE &
+       is.na(data$GGF) == TRUE &
        str_detect(data$股东全称3, "基金") &
        str_detect(data$股东全称3, "证券") == FALSE, ] %>% 
     select(Stkcd, Reptdt, 股东全称3) %>%
@@ -214,41 +220,42 @@ check_not_merged(keyword = "文化")
 
 # 3.8 抽取已合并的十大股东样本
 merged_SH_GGF_dupl <- merged_SH_GGF %>% 
-  filter(GovFund == 1) %>% 
+  filter(GGF == 1) %>% 
   mutate(Year = year(Reptdt)) %>% 
-  select(Stkcd, Year, GovFund, GGFName = 股东全称3,
+  select(Stkcd, Year, GGF, GGFName = 股东全称3,
          GGFLevel = 基金级别, GGFProvince = 注册省份,
          HoldNum = S0302a, HoldRatio = S0304a, HoldRank = S0306a)
 ### 1308个观测，由于存在多个引导基金同年度持股一家上市公司，因此存在重复观测
 ### 对于重复观测，按Stkcd和Year聚合，保存持股比例高的,即排名靠前的
-merged_SH_GGF_nodupl <- merged_SH_GGF_dupl %>% 
-  group_by(Stkcd, Year) %>% 
-  mutate(minHoldRank = min(HoldRank)) %>% 
-  filter(HoldRank == minHoldRank) %>% 
-  select(-minHoldRank) %>% 
-  ungroup()
+merged_SH_GGF_nodupl <- merged_SH_GGF_dupl |> 
+  group_by(Stkcd, Year) |> 
+  filter(HoldRatio == max(HoldRatio)) |> 
+  ungroup() |> 
+  distinct(Stkcd, Year, .keep_all = TRUE)
+merged_SH_GGF_nodupl |> dim()
 ### 去重后得到1196个观测，其中2017-2021年有995个
 
-# 3.9 计算引导基金是否第一年持股
-merged_SH_GGF_nodupl <- merged_SH_GGF_nodupl %>% 
-  group_by(Stkcd) %>% 
-  mutate(FirstHoldYear = min(Year)) %>% 
-  ungroup() %>% 
-  mutate(IsFirstHold = ifelse(Year == FirstHoldYear, 1, 0)) %>% 
-  select(-FirstHoldYear)
-colnames(merged_SH_GGF_nodupl)
+# 3.9 保存十大股东与引导基金合并数据
+write_rds(
+  x = merged_SH_GGF, 
+  file = file.path(output_path, "merged_Big10SH_GGF.rds")
+)
+write_rds(
+  x = merged_SH_GGF_nodupl, 
+  file = file.path(output_path, "merged_Big10SH_GGF_nodupl.rds")
+)
+dbWriteTable(
+  conn = con_sqlite,
+  name = "merged_Big10SH_GGF_nodupl",
+  value = merged_SH_GGF_nodupl,
+  overwrite = TRUE
+)
+dbWriteTable(
+  conn = con_sqlite,
+  name = "merged_Big10SH_GGF_dupl",
+  value = merged_SH_GGF_dupl,
+  overwrite = TRUE
+)
 
-# 3.10 保存十大股东与引导基金合并数据
-write_rds(merged_SH_GGF, file.path(output_path, "merged_Big10SH_GGF.rds"))
-write_rds(merged_SH_GGF_nodupl, file.path(output_path, "merged_Big10SH_GGF_nodupl.rds"))
-# dbWriteTable(conn = con_sqlite,
-#              name = "merged_Big10SH_GGF_nodupl",
-#              value = merged_SH_GGF_nodupl,
-#              overwrite = TRUE)
-# dbWriteTable(conn = con_sqlite,
-#              name = "merged_Big10SH_GGF_dupl",
-#              value = merged_SH_GGF_dupl,
-#              overwrite = TRUE)
 dbDisconnect(con_sqlite)
-save.image(file = "Government_Guide_Fund/temp/2022-08-28_preprocess01.RData")
-
+rm(list = ls())
