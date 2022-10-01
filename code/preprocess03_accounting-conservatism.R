@@ -19,9 +19,9 @@ library(purrr)
 library(DBI)
 
 ## 预定义输入输出路径
-data_path <- "Government_Guide_Fund/data"
-output_path <- "Government_Guide_Fund/output"
-db_path <- "Government_Guide_Fund/data/GGF_project_store.sqlite"
+data_path <- "data"
+output_path <- "output"
+db_path <- "data/GGF_project_store.sqlite"
 
 ## 建立数据库连接
 con_sqlite <- dbConnect(RSQLite::SQLite(), db_path)
@@ -39,7 +39,7 @@ identifier<- dbReadTable(con_sqlite, "identifier")
 year_return <- read_xlsx(file.path(data_path, "stock_return/2022-08-09_year-return.xlsx"))
 year_return <- year_return %>% 
   mutate(Year = as.numeric(交易年份)) %>% 
-  filter(Year >= 2016) %>% 
+  filter(Year >= 2010) %>% 
   select(Stkcd = 证券代码, Year, YearClose = 年收盘价, 
          YearOpen = 年开盘价, MarketValue = 年个股总市值, 
          YRet = 考虑现金红利再投资的年个股回报率) 

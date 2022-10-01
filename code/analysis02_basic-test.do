@@ -1,5 +1,5 @@
 
-cd "~/Documents/R_Projects/Government_Guide_Fund/output"
+cd "~/Documents/R_Projects/Government_Guide_Fund/output/tables"
 
 * clear
 * use "merged_for_reg_reduced_19796.dta"
@@ -90,12 +90,22 @@ esttab test*
 
 /******************************* Base Regression ****************************/
 #delimit ;
-eststo fe_simple:
+eststo simple_ols:
+	quietly reg EPS_P $base_reg $GGF_reg
+	;
+#delimit cr
+quietly estadd local fe_industry "NO", replace
+quietly estadd local fe_year "NO", replace
+quietly estadd local fe_province "NO", replace
+quietly estadd local fe_indu_year "NO", replace
+quietly estadd local fe_prov_year "NO", replace
+
+#delimit ;
+eststo simple_fe:
 	quietly reghdfe EPS_P $base_reg $GGF_reg, 
 	absorb($common_fe)
 	;
 #delimit cr
-quietly estadd local control "NO", replace
 quietly estadd local fe_industry "YES", replace
 quietly estadd local fe_year "YES", replace
 quietly estadd local fe_province "YES", replace
@@ -103,12 +113,11 @@ quietly estadd local fe_indu_year "NO", replace
 quietly estadd local fe_prov_year "NO", replace
 
 #delimit ;
-eststo ols_control:
-	quietly reg EPS_P $base_reg $GGF_reg 
-	$Size_reg $Lev_reg $SOE_reg $GDP_reg,
+eststo control_ols:
+    quietly reg EPS_P $base_reg $GGF_reg 
+	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg,
 	;
 #delimit cr
-quietly estadd local control "YES", replace
 quietly estadd local fe_industry "NO", replace
 quietly estadd local fe_year "NO", replace
 quietly estadd local fe_province "NO", replace
@@ -116,13 +125,11 @@ quietly estadd local fe_indu_year "NO", replace
 quietly estadd local fe_prov_year "NO", replace
     
 #delimit ;
-eststo fe_control:
-	quietly reghdfe EPS_P $base_reg $GGF_reg 
-	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg, 
+eststo simple_high_fe:
+	quietly reghdfe EPS_P $base_reg $GGF_reg, 
 	absorb($common_fe $high_fe)
     ;
 #delimit cr
-quietly estadd local control "YES", replace
 quietly estadd local fe_industry "YES", replace
 quietly estadd local fe_year "YES", replace
 quietly estadd local fe_province "YES", replace
@@ -130,13 +137,12 @@ quietly estadd local fe_indu_year "YES", replace
 quietly estadd local fe_prov_year "YES", replace
 
 #delimit ;
-eststo high_fe_control:
-	reghdfe EPS_P $base_reg $GGF_reg
+eststo control_high_fe:
+	quietly reghdfe EPS_P $base_reg $GGF_reg
 	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg, 
 	absorb($common_fe $high_fe)  
-    vce(robust);
+	;
 #delimit cr
-quietly estadd local control "YES", replace
 quietly estadd local fe_industry "YES", replace
 quietly estadd local fe_year "YES", replace
 quietly estadd local fe_province "YES", replace
@@ -342,12 +348,12 @@ global var_list "DR Ret 1.DR#c.Ret GGF 0.GGF#1.DR 1.GGF#c.Ret 1.GGF#1.DR#c.Ret"
 
 
 #delimit ;                               
-esttab fe_simple ols_control fe_control high_fe_control           
+esttab simple_ols simple_fe simple_high_fe control_ols control_high_fe           
     using base_regression.rtf      ,  
-	replace label nogap star(* 0.10 ** 0.05 *** 0.01) 
-    keep($var_list) varwidth(15) b t(4) ar2(4) 
-	s(control fe_industry fe_year fe_province fe_indu_year fe_prov_year N r2_a, 
-	  label("Control Variables" "Industry FE" "Year FE" "Province FE" 
+	replace baselevel label nogap star(* 0.10 ** 0.05 *** 0.01) 
+    varwidth(15) b t(4) ar2(4) 
+	s(fe_industry fe_year fe_province fe_indu_year fe_prov_year N r2_a, 
+	  label("Industry FE" "Year FE" "Province FE" 
 			"Industry ✖ Year FE" "Province ✖ Year FE" "Obs" "adjusted-R2"))	
     mtitle("Simple High FE" "Only Control No FE" "Control & FE" "Control & High FE");
 #delimit cr

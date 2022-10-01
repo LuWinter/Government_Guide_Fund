@@ -85,12 +85,14 @@ merged_for_reg_reduced <- merged_for_reg %>%
 
 
 # 2. 模型检验 -----------------------------------------------------------------
+stata(src = "code/analysis01_descriptive-table.do",
+      data.in = filter(merged_for_reg_reduced, Year >= 2017))
 
 stata(src = "code/analysis02_basic-test.do",
-      data.in = filter(merged_for_reg, Year >= 2017))
+      data.in = filter(merged_for_reg_reduced, Year >= 2017))
 
 stata(src = "code/analysis03_mechanism-test.do",
-      data.in = filter(merged_for_reg, Year >= 2017))
+      data.in = filter(merged_for_reg_reduced, Year >= 2017))
 
 dbDisconnect(con_sqlite)
 

@@ -1,7 +1,5 @@
-.Rproj.user
-.Rhistory
-.RData
-.Ruserdata
-data/
 temp/
 output/
+data/
+.Rhistory
+.Rproj.user/
