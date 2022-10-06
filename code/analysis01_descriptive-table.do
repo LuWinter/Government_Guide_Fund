@@ -7,8 +7,8 @@ keep if Year >= 2017
 logout, save("summary-variables.doc") word replace:
     tabstat EPS_P DR Ret GGF 
     Size Lev MHRatio Age GDP_p 
-    CG SuperINS RegionFin RDRatio StrategyScore,
-    s(N mean p50 sd min max) c(s)
+    CG INS SuperINS RegionFin RDRatio StrategyScore,
+    s(N mean sd min p25 p50 p75 max) c(s)
     ;
 #delimit cr
 

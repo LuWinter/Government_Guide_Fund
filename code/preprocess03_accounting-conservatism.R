@@ -65,22 +65,23 @@ head(year_return)
 
 # 2. 累积月份数据计算股票年收益 --------------------------------------------------------
 ### 数据来源：CSMAR股票市场 - 股票市场交易 - 月个股回报率文件
-### 数据属性：2015.5-2021.4年度 全部股票代码 6个变量 302360条观测
-month_return <- read_xlsx(file.path(data_path, "stock_return/2022-09-03_month-return.xlsx"))
+### 数据属性：2010.1-2022.9年度 全部股票代码 6个变量 477863条观测
+month_return <- 
+  read_csv(file.path(data_path, "stock_return/2022-10-02_month-return.csv"))
 colnames(month_return)
 month_return <- month_return %>% 
   mutate(Year = as.numeric(str_extract(Trdmnt, "^[0-9]{4}")),
          Month = as.numeric(str_extract(Trdmnt, "[0-9]{2}$"))) %>% 
   mutate(NewYear = ifelse(Month < 5, Year - 1, Year)) %>% 
-  filter(NewYear >= 2016) %>%  
+  filter(NewYear >= 2010, NewYear <= 2021) %>% 
   group_by(Stkcd, NewYear) %>% 
-  filter(n() == 12) %>% 
   summarise(Ret = prod(Mretwd + 1) - 1) %>% 
   ungroup()
 
 ### 数据来源：CSMAR股票市场 - 综合市场交易数据 — 综合月市场回报率文件
-### 数据属性：2015.5-2021.4年度 全部市场代码 3个变量 1596条观测
-month_market_return <- read_xlsx(file.path(data_path, "stock_return/2022-09-03_month-market-return.xlsx"))
+### 数据属性：20110.1-2022.9年度 全部市场代码 3个变量 2907条观测
+month_market_return <- 
+  read_csv(file.path(data_path, "stock_return/2022-10-02_month-market-return.csv"))
 head(month_market_return)
 month_market_return <- month_market_return %>% 
   filter(Markettype == 53) %>% 
@@ -101,9 +102,10 @@ head(month_return)
 # 3. 合并所有数据 ---------------------------------------------------------------
 
 ### 数据来源：CSMAR公司研究 - 财务指标分析 - 每股指标
-### 数据属性：2015-2021年度 全部股票代码 3个变量 31980条观测
-earning_per_share <- read_xlsx(file.path(data_path, "2022-09-03_earning-per-share.xlsx"))
+### 数据属性：2010-2021年度 全部股票代码 5个变量 92652条观测
+earning_per_share <- read_csv(file.path(data_path, "2022-10-02_earning-per-share.csv"))
 earning_per_share <- earning_per_share %>% 
+  filter(Typrep == "A") %>% 
   mutate(Year = year(Accper)) %>% 
   select(Stkcd, Year, EPS = F090101B)
 
@@ -111,7 +113,7 @@ earning_per_share <- earning_per_share %>%
 ### 数据属性：2000-2021年度 全部股票代码 9个变量 498247条观测
 financial_sheet <- read_xlsx(file.path(data_path, "Financial_Sheet/2022-08-09_financial-sheets.xlsx"))
 financial_sheet <- financial_sheet %>% 
-  filter(month(会计期间) == 12, 报表类型 == "A", year(会计期间) >= 2016) %>% 
+  filter(month(会计期间) == 12, 报表类型 == "A", year(会计期间) >= 2010) %>% 
   mutate(Year = year(会计期间)) %>% 
   select(Stkcd = 证券代码, Year, 负债合计, 资产总计)
 
@@ -129,7 +131,7 @@ merged_for_khan <- identifier %>%
          Size, Lev, MB, YearOpen, YearClose)
 
 pmap_lgl(merged_for_khan, .f = \(...) sum(is.na(list(...))) == 0) %>% table()
-### 缺失数据样本2993个，无缺失样本18568个，一共2161个样本
+### 缺失数据样本2536个，无缺失样本33087个，一共35623个样本
 merged_for_khan <- merged_for_khan[pmap_lgl(merged_for_khan, .f = \(...) sum(is.na(list(...))) == 0), ]
 
 
@@ -145,11 +147,11 @@ formula_khan_adj <- formula(EPS / YearOpen ~ adjDR +
                               adjDR:adjRet + adjDR:Size:adjRet + adjDR:MB:adjRet + adjDR:Lev:adjRet)
 ### Reference: 李争光, 赵西卜, 曹丰, & 刘向强. (2015). 机构投资者异质性与
 ### 会计稳健性——来自中国上市公司的经验证据. 南开管理评论, 18(03), 111–121.
-coef_res <- map(c(2016:2021), \(x) coef(
+coef_res <- map(c(2010:2021), \(x) coef(
   lm(formula = formula_khan_adj, data = subset(merged_for_khan, Year == x))
 ))
 coef_res2 <- tibble(
-  Year = 2016:2021,
+  Year = 2010:2021,
   a1 = map_dbl(coef_res, 3),
   a2 = map_dbl(coef_res, 4),
   a3 = map_dbl(coef_res, 5),
@@ -168,12 +170,16 @@ accounting_conservatism <- merged_for_khan %>%
 rm(coef_res, coef_res2)
 
 # 2.2 保存计算结果
-write_rds(x = accounting_conservatism,
-          file = file.path(output_path, "accounting_conservatism_adj.rds"))
-dbWriteTable(conn = con_sqlite,
-             name = "accounting_conservatism_adj",
-             value = accounting_conservatism,
-             overwrite = TRUE)
+rio::export(
+  x = accounting_conservatism,
+  file = file.path(output_path, "accounting_conservatism.dta")
+)
+dbWriteTable(
+  conn = con_sqlite,
+  name = "accounting_conservatism_adj",
+  value = accounting_conservatism,
+  overwrite = TRUE
+)
 dbDisconnect(con_sqlite)
 
 

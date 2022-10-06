@@ -32,28 +32,34 @@ options("RStata.StataVersion" = 17)
 # 1. 合并预处理数据 --------------------------------------------------------------
 
 merged_Big10SH_GGF_nodupl <- readRDS(file.path(output_path, "merged_Big10SH_GGF_nodupl.rds"))
-accounting_conservatism <- readRDS(file = file.path(output_path, "accounting_conservatism.rds"))
-control_variables <- readRDS(file = file.path(output_path, "control_variables.rds"))
-
-merged_Big10SH_GGF_nodupl <- merged_Big10SH_GGF_nodupl %>%
-  mutate(Year = Year + 1)
+accounting_conservatism <- rio::import(file = file.path(output_path, "accounting_conservatism.dta"))
+control_variables <- readRDS(file = file.path(output_path, "control-variables_2022-10-03.rds"))
 
 # accounting_conservatism <- accounting_conservatism %>%
 #   select(-Ret, -DR) %>%
 #   rename(Ret = adjRet, DR = adjDR)
 
+control_variables %>% 
+  apply(MARGIN = 2, FUN = \(x) sum(is.na(x)))
 control_variables <- control_variables %>% 
-  filter(if_all(!matches("StrategyScore|ESGRating|RDRatio"), ~ !is.na(.x)))
-### 除了StrategyScore外，有19244个无缺样本
+  filter(if_all(!matches("StrategyScore|RDRatio"), ~ !is.na(.x))) %>% 
+  filter(!is.na(RDRatio) | Year < 2016)
+### 除了StrategyScore和2016年前的RDRatio外的缺失样本删去
+
+accounting_conservatism <- accounting_conservatism %>% 
+  mutate(Year = Year - 1)
+### 所有的解释变量都要滞后一期
 
 merged_for_reg <- accounting_conservatism %>% 
   select(Stkcd, Year, G_Score, C_Score, EPS, YearOpen, YearClose, 
          Ret, DR, Size, MB, Lev) %>% 
   left_join(merged_Big10SH_GGF_nodupl, by = c("Stkcd", "Year")) %>% 
-  mutate(GGF = ifelse(is.na(GovFund), 0, 1)) %>% 
-  filter(Year >= 2016) %>% 
+  mutate(GGF = ifelse(is.na(GGF), 0, 1)) %>% 
+  filter(Year >= 2012) %>% 
   left_join(control_variables, by = c("Stkcd", "Year")) %>% 
   mutate(Age = Year - lubridate::year(EstablishDate))
+
+### 检查变量缺失情况
 merged_for_reg %>%   
   apply(MARGIN = 2, FUN = \(x) sum(is.na(x)))
 merged_for_reg <- merged_for_reg %>% 
@@ -61,18 +67,18 @@ merged_for_reg <- merged_for_reg %>%
 merged_for_reg %>%   
   apply(MARGIN = 2, FUN = \(x) sum(is.na(x)))
 
-## 变量总计：35
+## 变量总计：32
 ## 标识（2）：Stkcd Year
 ## 会计稳健性（7）：G_Score C_Score EPS YearOpen YearClose DR Ret
-## 引导基金（7）：GovFund GGFLevel GGFProvince IsFirstHold HoldNum HoldRatio HoldRank
-## 控制变量（16）：Size MB Lev RegionFin SOE Big4 INS SuperINS MHRatio 
-## ListingYear GDP_p Subsidies StrategyScore CG RDRatio ESGRating
+## 引导基金（6）：GovFund GGFLevel GGFProvince HoldNum HoldRatio HoldRank
+## 控制变量（14）：Size MB Lev RegionFin SOE Big4 INS SuperINS MHRatio 
+## ListingYear GDP_p StrategyScore CG RDRatio 
 ## 固定效应（3）：IndustryCode Province City
 merged_for_reg <- merged_for_reg[, c("Stkcd", "Year", 
      "G_Score", "C_Score", "EPS", "YearOpen", "YearClose", "DR", "Ret",
-     "GGF", "GGFLevel", "GGFProvince", "IsFirstHold", "HoldNum", "HoldRatio", "HoldRank",
+     "GGF", "GGFLevel", "GGFProvince", "HoldNum", "HoldRatio", "HoldRank",
      "Size", "MB", "Lev", "RegionFin", "SOE", "Big4", "INS", "SuperINS", "MHRatio", 
-     "ListingYear", "GDP_p", "Subsidies", "StrategyScore", "CG", "Age", "RDRatio", "ESGRating", 
+     "ListingYear", "GDP_p", "StrategyScore", "CG", "Age", "RDRatio",  
      "IndustryCode", "Province", "City")]
 
 merged_for_reg_reduced <- merged_for_reg %>% 
@@ -80,19 +86,21 @@ merged_for_reg_reduced <- merged_for_reg %>%
   filter(n() > 2) %>% 
   ungroup()
 
-# saveRDS(merged_for_reg, file = paste0("merged-for-reg_", today(), ".rds"))
-# saveRDS(merged_for_reg_reduced, file = paste0("merged-for-reg-reduced_", today(), ".rds"))
+saveRDS(merged_for_reg, file = paste0("merged-for-reg_", today(), ".rds"))
+saveRDS(merged_for_reg_reduced, file = paste0("merged-for-reg-reduced_", today(), ".rds"))
+# merged_for_reg <- readRDS(file.path(output_path, "merged-for-reg_2022-10-03.rds"))
+# merged_for_reg_reduced <- readRDS(file.path(output_path, "merged-for-reg-reduced_2022-10-03.rds"))
 
 
 # 2. 模型检验 -----------------------------------------------------------------
 stata(src = "code/analysis01_descriptive-table.do",
-      data.in = filter(merged_for_reg_reduced, Year >= 2017))
+      data.in = filter(merged_for_reg_reduced, Year >= 2012))
 
 stata(src = "code/analysis02_basic-test.do",
-      data.in = filter(merged_for_reg_reduced, Year >= 2017))
+      data.in = filter(merged_for_reg_reduced, Year >= 2012))
 
 stata(src = "code/analysis03_mechanism-test.do",
-      data.in = filter(merged_for_reg_reduced, Year >= 2017))
+      data.in = filter(merged_for_reg_reduced, Year >= 2012))
 
 dbDisconnect(con_sqlite)
 
