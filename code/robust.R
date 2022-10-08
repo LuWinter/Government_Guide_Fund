@@ -35,8 +35,10 @@ identifier <- dbReadTable(
   conn = con_sqlite,
   name = "identifier"
 )
-merged_for_reg <- readRDS(file = file.path(output_path, "old/merged-for-reg_2022-09-05.rds"))
-merged_for_reg_reduced <- readRDS(file = file.path(output_path, "old/merged-for-reg-reduced_2022-09-05.rds"))
+merged_for_reg <- 
+  readRDS(file.path(output_path, "merged-for-reg_2022-10-07.rds"))
+merged_for_reg_reduced <- 
+  readRDS(file.path(output_path, "merged-for-reg-reduced_2022-10-07.rds"))
 
 
 ### 样本为 1. 从2017到被GGF持股为止的年度  2. 被GGF持股的年度
@@ -47,7 +49,7 @@ within_corps <- merged_for_reg_reduced |>
 
 stata(
   src = "code/robust01_simple-reg.do",
-  data.in = filter(within_corps, Year >= 2017)
+  data.in = filter(within_corps, Year >= 2016)
 )
 ### 发现：只加入一般固定效应，结论很显著；
 ### 加入高维固定效应后，结论非常不显著；
@@ -100,7 +102,7 @@ test_holdratio <- bind_rows(
   )
 stata(
   src = "code/robust02_hold-ratio.do",
-  data.in = filter(test_holdratio, Year >= 2017)
+  data.in = filter(test_holdratio, Year >= 2016)
 )
 ### 结果发现，不是非常显著，不同的样本显著性有所区别，
 ### 这或许可以通过调整样本来解决
@@ -116,10 +118,9 @@ test_C_score$C_Score <- map_dbl(
   .x = test_C_score$C_Score,
   .f = \(x) div_10(x, test_C_score$C_Score)
 )
-
 stata(
   src = "code/robust04_C-score.do",
-  data.in = filter(test_C_score, Year >= 2017)
+  data.in = filter(test_C_score, Year >= 2016)
 )
 
 

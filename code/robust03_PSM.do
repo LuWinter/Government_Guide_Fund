@@ -2,129 +2,90 @@
 cd "~/Documents/R_Projects/Government_Guide_Fund/output/tables"
 
 *clear
-*use "merged-for-reg_2022-09-05.dta"
+*use "PSM-DID_2022-10-06.dta"
 
 destring Stkcd, replace
 xtset Stkcd Year
 
 gen EPS_P = EPS / YearOpen
-gen IndustryCode2 = cond(substr(IndustryCode, 1, 1) != "C", substr(IndustryCode, 1, 1), substr(IndustryCode, 1, 2))
-egen Industry = group(IndustryCode2)
 
 egen Province2 = group(Province)
 rename Province Province_str
 rename Province2 Province
+egen Industry2 = group(Industry)
+drop Industry
+rename Industry2 Industry
 
-
-winsor2 Ret Size MB Lev GDP_p SuperINS MHRatio, cuts(1 99) by(Year) trim
-
+gen Ret_DR = DR * Ret
+gen Post_DR = Post * DR
+gen Post_Ret = Post * Ret
+gen Post_Ret_DR = Post * Ret * DR
+gen Treat_DR = Treat * DR
+gen Treat_Ret = Treat * Ret
+gen Treat_Ret_DR = Treat * Ret * DR
+gen Post_Treat_Ret = Post_Treat * Ret
+gen Post_Treat_DR = Post_Treat * DR
+gen Post_Treat_Ret_DR = Post_Treat * Ret * DR
 
 
 /******************************* Macros Defination ****************************/
 
 // Control Variable Macros
-global base_reg "DR Ret DR#c.Ret"
-global GGF_reg "GGF GGF#DR GGF#c.Ret GGF#DR#c.Ret"
-global Size_reg "Size c.Size#DR c.Size#c.Ret c.Size#DR#c.Ret"
-global MB_reg "MB c.MB#DR c.MB#c.Ret c.MB#DR#c.Ret"
-global Lev_reg "Lev c.Lev#DR c.Lev#c.Ret c.Lev#DR#c.Ret"
-global Big4_reg "Big4 Big4#DR Big4#c.Ret Big4#DR#c.Ret"
-global SOE_reg "SOE SOE#DR SOE#c.Ret SOE#DR#c.Ret"
-global GDP_reg "GDP_p c.GDP_p#DR c.GDP_p#c.Ret c.GDP_p#DR#c.Ret"
-global SuperINS_reg "SuperINS c.SuperINS#DR c.SuperINS#c.Ret c.SuperINS#DR#c.Ret"
-global MHRatio_reg "MHRatio c.MHRatio#DR c.MHRatio#c.Ret c.MHRatio#DR#c.Ret"
-global Age_reg "Age c.Age#DR c.Age#c.Ret c.Age#DR#c.Ret"
+global vars "EPS_P Ret DR Ret_DR Post_DR Post Post_Ret Post_Ret_DR"
+global vars2 "EPS_P Ret DR Ret_DR Treat_DR Treat Treat_Ret Treat_Ret_DR"
 
 // Fixed Effect Macros
 global common_fe "i.Year i.Industry i.Province"
-global high_fe "i.Year#i.Province"
-
-
-
-/******************************* PSM ****************************/
-gen RDRatio2 = RDRatio ^ 2
-gen Age2 = Age ^ 2
-
-pscore GGF Size Lev SOE CG Age RDRatio GDP_p, logit comsup blockid(block) pscore(myscore)
-psmatch2 GGF if comsup == 1, pscore(myscore) neighbor(1) noreplacement
-tab _treated if _weight != .
-keep if _weight != .
-
+global high_fe "i.Year#i.Province i.Year#i.Industry"
 
 
 /********************************* Perform Test ******************************/
 
+eststo x1: reghdfe $vars if Treat == 0, absorb($common_fe)
+quietly estadd local fe_industry "YES"
+quietly estadd local fe_year "YES"
+quietly estadd local fe_province "YES"
+
+eststo x2: reghdfe $vars if Treat == 1, absorb($common_fe)
+quietly estadd local fe_industry "YES"
+quietly estadd local fe_year "YES"
+quietly estadd local fe_province "YES"
+
+eststo x3: reghdfe $vars2 if Post == 0, absorb($common_fe)
+quietly estadd local fe_industry "YES"
+quietly estadd local fe_year "YES"
+quietly estadd local fe_province "YES"
+
+eststo x4: reghdfe $vars2 if Post == 1, absorb($common_fe)
+quietly estadd local fe_industry "YES"
+quietly estadd local fe_year "YES"
+quietly estadd local fe_province "YES"
+
+*bdiff, group(Treat) model(reg $vars) surtest
+   
 #delimit ;
-eststo fe_simple:
-	quietly reghdfe EPS_P $base_reg $GGF_reg, 
-	absorb($common_fe)
-	;
+eststo did:
+    reghdfe EPS_P Ret DR Ret_DR 
+    Post Post_Ret Post_DR Post_Ret_DR
+    Treat Treat_Ret Treat_DR Treat_Ret_DR
+    Post_Treat Post_Treat_Ret Post_Treat_DR Post_Treat_Ret_DR
+    , absorb($common_fe);
 #delimit cr
-quietly estadd local control "NO", replace
-quietly estadd local fe_industry "YES", replace
-quietly estadd local fe_year "YES", replace
-quietly estadd local fe_province "YES", replace
-quietly estadd local fe_indu_year "NO", replace
-quietly estadd local fe_prov_year "NO", replace
-
-
-#delimit ;
-eststo fe_control:
-	quietly reghdfe EPS_P $base_reg $GGF_reg 
-	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg, 
-	absorb($common_fe)
-    ;
-#delimit cr
-quietly estadd local control "YES", replace
-quietly estadd local fe_industry "YES", replace
-quietly estadd local fe_year "YES", replace
-quietly estadd local fe_province "YES", replace
-quietly estadd local fe_indu_year "NO", replace
-quietly estadd local fe_prov_year "NO", replace
-
-#delimit ;
-eststo high_fe_control:
-	quietly reghdfe EPS_P $base_reg $GGF_reg 
-	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg, 
-	absorb($common_fe $high_fe)
-    ;
-#delimit cr
-quietly estadd local control "YES", replace
-quietly estadd local fe_industry "YES", replace
-quietly estadd local fe_year "YES", replace
-quietly estadd local fe_province "YES", replace
-quietly estadd local fe_indu_year "YES", replace
-quietly estadd local fe_prov_year "YES", replace
-
-
-#delimit ;
-eststo cluster_fe_control:
-	quietly reghdfe EPS_P $base_reg $GGF_reg 
-	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg, 
-	absorb($common_fe) vce(cl Industry)
-    ;
-#delimit cr
-quietly estadd local control "YES", replace
-quietly estadd local fe_industry "YES", replace
-quietly estadd local fe_year "YES", replace
-quietly estadd local fe_province "YES", replace
-quietly estadd local fe_indu_year "NO", replace
-quietly estadd local fe_prov_year "NO", replace
-
+quietly estadd local fe_industry "YES"
+quietly estadd local fe_year "YES"
+quietly estadd local fe_province "YES"
 
 
 /*************************** Output Regression Result *************************/
 
-global var_list "DR Ret 1.DR#c.Ret GGF 0.GGF#1.DR 1.GGF#c.Ret 1.GGF#1.DR#c.Ret"
+global var_list "Post Post_Ret_DR Treat Treat_Ret_DR Post_Treat Post_Treat_Ret_DR"
 
 #delimit ;                               
-esttab fe_simple fe_control high_fe_control cluster_fe_control
-	using robust03_PSM.rtf,  
+esttab x1 x2 x3 x4 did
+	using robust03_PSM-DID.rtf,  
 	replace label nogap star(* 0.10 ** 0.05 *** 0.01) 
-    keep($var_list) varwidth(15) b t(4) ar2(4) 
-	s(control fe_industry fe_year fe_province fe_indu_year fe_prov_year N r2_a, 
-	  label("Control Variables" "Industry FE" "Year FE" "Province FE" 
-			"Industry ✖ Year FE" "Province ✖ Year FE" "Obs" "adjusted-R2"));
+    varwidth(15) b t(4) ar2(4) 
+	s(fe_industry fe_year fe_province N r2_a, 
+	    label("Industry FE" "Year FE" "Province FE" "Obs" "adjusted-R2"));
 #delimit cr
-
 

@@ -385,12 +385,11 @@ rd_cost <- read_csv(
 )
 rd_cost <- rd_cost %>% 
   mutate(Year = year(EndDate)) %>% 
-  filter(StateTypeCode == 1) %>% 
+  filter(StateTypeCode == 1, month(EndDate) == 12) %>% 
   select(
     Stkcd = Symbol, Year, 
     RDCost = RDSpendSum, RDRatio = RDSpendSumRatio
   )
-
 rd_cost <- rd_cost %>% 
   left_join(revenue_info, by = c("Stkcd", "Year")) %>% 
   mutate(
@@ -428,6 +427,7 @@ list(
   management_info, governance_structure, region_fin, 
   strategy_score, governance_score, rd_cost
 ) %>% map(.f = \(x) count(x, Year))
+
 
 control_variables <- list(
     identifier_info, equity_nature, auditor_info, insti_investor, 

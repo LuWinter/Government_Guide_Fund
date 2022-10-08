@@ -34,6 +34,7 @@ options("RStata.StataVersion" = 17)
 merged_Big10SH_GGF_nodupl <- readRDS(file.path(output_path, "merged_Big10SH_GGF_nodupl.rds"))
 accounting_conservatism <- rio::import(file = file.path(output_path, "accounting_conservatism.dta"))
 control_variables <- readRDS(file = file.path(output_path, "control-variables_2022-10-03.rds"))
+identifier <- dbReadTable(con_sqlite, "identifier")
 
 # accounting_conservatism <- accounting_conservatism %>%
 #   select(-Ret, -DR) %>%
@@ -42,15 +43,15 @@ control_variables <- readRDS(file = file.path(output_path, "control-variables_20
 control_variables %>% 
   apply(MARGIN = 2, FUN = \(x) sum(is.na(x)))
 control_variables <- control_variables %>% 
-  filter(if_all(!matches("StrategyScore|RDRatio"), ~ !is.na(.x))) %>% 
-  filter(!is.na(RDRatio) | Year < 2016)
-### 除了StrategyScore和2016年前的RDRatio外的缺失样本删去
+  filter(if_all(!matches("StrategyScore|RDRatio"), ~ !is.na(.x)))
+### 除了StrategyScore外的缺失样本删去
 
 accounting_conservatism <- accounting_conservatism %>% 
   mutate(Year = Year - 1)
 ### 所有的解释变量都要滞后一期
 
-merged_for_reg <- accounting_conservatism %>% 
+merged_for_reg <- identifier %>% 
+  left_join(accounting_conservatism, by = c("Stkcd", "Year")) %>% 
   select(Stkcd, Year, G_Score, C_Score, EPS, YearOpen, YearClose, 
          Ret, DR, Size, MB, Lev) %>% 
   left_join(merged_Big10SH_GGF_nodupl, by = c("Stkcd", "Year")) %>% 
@@ -63,7 +64,7 @@ merged_for_reg <- accounting_conservatism %>%
 merged_for_reg %>%   
   apply(MARGIN = 2, FUN = \(x) sum(is.na(x)))
 merged_for_reg <- merged_for_reg %>% 
-  filter(!is.na(CG)) 
+  filter(!is.na(CG), !is.na(YearOpen)) 
 merged_for_reg %>%   
   apply(MARGIN = 2, FUN = \(x) sum(is.na(x)))
 
@@ -86,21 +87,43 @@ merged_for_reg_reduced <- merged_for_reg %>%
   filter(n() > 2) %>% 
   ungroup()
 
-saveRDS(merged_for_reg, file = paste0("merged-for-reg_", today(), ".rds"))
-saveRDS(merged_for_reg_reduced, file = paste0("merged-for-reg-reduced_", today(), ".rds"))
-# merged_for_reg <- readRDS(file.path(output_path, "merged-for-reg_2022-10-03.rds"))
-# merged_for_reg_reduced <- readRDS(file.path(output_path, "merged-for-reg-reduced_2022-10-03.rds"))
+saveRDS(
+  object = merged_for_reg, 
+  file = file.path(output_path, paste0("merged-for-reg_", today(), ".rds"))
+)
+saveRDS(
+  object = merged_for_reg_reduced, 
+  file = file.path(output_path, paste0("merged-for-reg-reduced_", today(), ".rds"))
+)
+# merged_for_reg <- readRDS(file.path(output_path, "merged-for-reg_2022-10-07.rds"))
+# merged_for_reg_reduced <- readRDS(file.path(output_path, "merged-for-reg-reduced_2022-10-07.rds"))
+
+stata_command <- "
+winsor2 Ret Size Lev MHRatio RDRatio GDP_p INS Age SuperINS, cuts(1 99) by(Year) trim
+"
+merged_for_reg_reduced <- stata(
+  src = stata_command,
+  data.in = merged_for_reg_reduced,
+  data.out = TRUE
+)
 
 
 # 2. 模型检验 -----------------------------------------------------------------
-stata(src = "code/analysis01_descriptive-table.do",
-      data.in = filter(merged_for_reg_reduced, Year >= 2012))
+stata(
+  src = "code/analysis01_descriptive-table.do",
+  data.in = filter(merged_for_reg_reduced, Year >= 2016)
+)
 
-stata(src = "code/analysis02_basic-test.do",
-      data.in = filter(merged_for_reg_reduced, Year >= 2012))
+stata(
+  src = "code/analysis02_basic-test.do",
+  data.in = filter(merged_for_reg_reduced, Year >= 2016)
+)
 
-stata(src = "code/analysis03_mechanism-test.do",
-      data.in = filter(merged_for_reg_reduced, Year >= 2012))
+stata(
+  src = "code/analysis03_mechanism-test.do",
+  data.in = filter(merged_for_reg_reduced, Year >= 2016)
+)
 
 dbDisconnect(con_sqlite)
+
 

@@ -37,7 +37,7 @@ global Age_reg "Age c.Age#DR c.Age#c.Ret c.Age#DR#c.Ret"
 
 // Fixed Effect Macros
 global common_fe "i.Year i.Industry i.Province"
-global high_fe "i.Year#i.Province"
+global high_fe "i.Year#i.Province i.Year#i.Industry"
 
 
 /********************************* Perform Test ******************************/
@@ -81,23 +81,23 @@ quietly estadd local control "YES", replace
 quietly estadd local fe_industry "YES", replace
 quietly estadd local fe_year "YES", replace
 quietly estadd local fe_province "YES", replace
-quietly estadd local fe_indu_year "NO", replace
+quietly estadd local fe_indu_year "YES", replace
 quietly estadd local fe_prov_year "YES", replace
 
 
 #delimit ;
-eststo cluster_fe_control:
+eststo high_fe_control2:
 	quietly reghdfe EPS_P $base_reg $GGF_reg 
-	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg, 
-	absorb($common_fe) vce(cl Industry)
+	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg $CG_reg, 
+	absorb($common_fe $high_fe)
     ;
 #delimit cr
 quietly estadd local control "YES", replace
 quietly estadd local fe_industry "YES", replace
 quietly estadd local fe_year "YES", replace
 quietly estadd local fe_province "YES", replace
-quietly estadd local fe_indu_year "NO", replace
-quietly estadd local fe_prov_year "NO", replace
+quietly estadd local fe_indu_year "YES", replace
+quietly estadd local fe_prov_year "YES", replace
 
 
 /*************************** Output Regression Result *************************/
@@ -105,7 +105,7 @@ quietly estadd local fe_prov_year "NO", replace
 global var_list "DR Ret 1.DR#c.Ret HoldRatio 1.DR#c.HoldRatio c.HoldRatio#c.Ret 1.DR#c.HoldRatio#c.Ret"
 
 #delimit ;                               
-esttab fe_simple fe_control high_fe_control cluster_fe_control
+esttab fe_simple fe_control high_fe_control high_fe_control2
 	using robust02_hold-ratio.rtf,  
 	replace label nogap star(* 0.10 ** 0.05 *** 0.01) 
     keep($var_list) varwidth(15) b t(4) ar2(4) 

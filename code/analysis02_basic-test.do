@@ -22,7 +22,7 @@ tab Year GGF
 display _N
 
 
-winsor2 Ret Size MB Lev GDP_p SuperINS MHRatio, cuts(1 99) by(Year) trim
+winsor2 Ret Size Lev MHRatio RDRatio GDP_p INS Age SuperINS, cuts(1 99) by(Year) trim
 
 
 
@@ -140,7 +140,7 @@ quietly estadd local fe_prov_year "YES", replace
 eststo control_high_fe:
 	quietly reghdfe EPS_P $base_reg $GGF_reg
 	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg, 
-	absorb($common_fe $high_fe)  
+	absorb($common_fe $high_fe)
 	;
 #delimit cr
 quietly estadd local fe_industry "YES", replace
@@ -151,7 +151,7 @@ quietly estadd local fe_prov_year "YES", replace
 
              
 /******************************* No First-Hold Year Regression ****************************/
-tab IsFirstHold GGF
+/* tab IsFirstHold GGF
  
 #delimit ;
 eststo no_first_year:
@@ -209,7 +209,7 @@ quietly estadd local fe_industry "YES", replace
 quietly estadd local fe_year "YES", replace
 quietly estadd local fe_province "YES", replace
 quietly estadd local fe_indu_year "YES", replace
-quietly estadd local fe_prov_year "YES", replace
+quietly estadd local fe_prov_year "YES", replace */
 
            
 /******************************* No Minority-Holder Regression ****************************/
@@ -349,16 +349,16 @@ global var_list "DR Ret 1.DR#c.Ret GGF 0.GGF#1.DR 1.GGF#c.Ret 1.GGF#1.DR#c.Ret"
 
 #delimit ;                               
 esttab simple_ols simple_fe simple_high_fe control_ols control_high_fe           
-    using base_regression.rtf      ,  
+    using main-analysis01_base-regression.rtf, 
 	replace baselevel label nogap star(* 0.10 ** 0.05 *** 0.01) 
     varwidth(15) b t(4) ar2(4) 
 	s(fe_industry fe_year fe_province fe_indu_year fe_prov_year N r2_a, 
 	  label("Industry FE" "Year FE" "Province FE" 
 			"Industry ✖ Year FE" "Province ✖ Year FE" "Obs" "adjusted-R2"))	
-    mtitle("Simple High FE" "Only Control No FE" "Control & FE" "Control & High FE");
+    mtitle("Simple OLS" "Simple FE" "Simple High FE" "Control OLS" "Control High FE");
 #delimit cr
 
-#delimit ;
+/* #delimit ;
 esttab no_first*   only_first*                   
     using no_first_year_regression.rtf         ,
 	replace label nogap star(* 0.10 ** 0.05 *** 0.01)
@@ -367,11 +367,11 @@ esttab no_first*   only_first*
 	  label("Control Variables" "Industry FE" "Year FE" "Province FE" 
 			"Industry ✖ Year FE" "Province ✖ Year FE" "Obs" "adjusted-R2"))	
     mtitle("No First Year" "No First Year (Control)" "Only First Year" "Only First Year (Control)");
-#delimit cr
+#delimit cr */
 
 #delimit ;           
 esttab no_country*   only_country*               
-    using country_level_regression.rtf        ,
+    using main-analysis02_country-level.rtf, 
 	replace label nogap star(* 0.10 ** 0.05 *** 0.01) 
     keep($var_list) varwidth(15) b t(4) ar2(4) 
 	s(control fe_industry fe_year fe_province fe_indu_year fe_prov_year N r2_a, 
@@ -382,7 +382,7 @@ esttab no_country*   only_country*
 	
 #delimit ;
 esttab no_minority_holder minority_holder same_province no_same_province       
-    using minitory_province_regression.rtf    ,
+    using main-analysis03_minitory-province.rtf, 
 	replace label nogap star(* 0.10 ** 0.05 *** 0.01) 
     keep($var_list) varwidth(15) b t(4) ar2(4) 
 	s(control fe_industry fe_year fe_province fe_indu_year fe_prov_year N r2_a, 

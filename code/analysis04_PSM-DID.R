@@ -120,7 +120,7 @@ treat_for_match <- treat_full |>
 ### 5.LEV   6.研发   7.托宾Q   8.机构持股
 
 
-### 2.1 合并PSM控制变量
+## 2.1 合并PSM控制变量
 
 ### 数据来源：CSMAR公司研究 - 财务指标分析 - 相对价值指标
 ### 数据属性：2000-2021年度 全部股票代码 4个变量 50375条观测
@@ -253,6 +253,8 @@ for (i in 1:nrow(treat_sample)) {
   year_vec <- append(year_vec, temp_sample[index, 2])
   
   control_sample <- control_sample[!(control_sample$Stkcd %in% target_corp), ]
+  control_sample <- control_sample[sample(1:nrow(control_sample), nrow(control_sample), replace = FALSE), ]
+  
   rm(year, indu, score, temp_sample, index, target_corp)
 }
 
@@ -295,10 +297,11 @@ matched_control_full <- matched_control_full %>%
   filter(!is.na(Ret))
 
 
+
+# 3. 执行PSM—DID检验 ----------------------------------------------------------
+
 nrow(matched_treat_full)
 nrow(matched_control_full)
-
-
 matched_full <- bind_rows(
   mutate(matched_control_full, Treat = 0),
   mutate(matched_treat_full, Treat = 1)
@@ -307,37 +310,22 @@ matched_full <- bind_rows(
     Post_Treat = Post * Treat
   )
 
+# matched_full <- 
+#   rio::import(file.path(output_path, "PSM-DID_2022-10-06.dta"))
+
+corp_province <- con_sqlite %>% 
+  dbReadTable(name = "identifier_info") %>% 
+  select(Stkcd, Year, Province)
+matched_full <- matched_full %>% 
+  left_join(corp_province, by = c("Stkcd", "Year"))
 count(matched_full, Post, Treat)
 
-stata_command_str2 <- '
-   gen EPS_P = EPS / YearOpen
-   egen Industry2 = group(Industry)
-   drop Industry
-   rename Industry2 Industry
-   
-   gen Ret_DR = DR * Ret
-   gen Post_DR = Post * DR
-   gen Post_Ret = Post * Ret
-   gen Post_Ret_DR = Post * Ret * DR
-   
-   global vars "EPS_P Ret DR Ret_DR Post Post_DR Post_Ret Post_Ret_DR"
-   
-   reghdfe $vars if Treat == 1, absorb(i.Year i.Industry)
-   reghdfe $vars if Treat == 0, absorb(i.Year i.Industry)
-   
-   bdiff, group(Treat) model(reg $vars) surtest
-   
-   #delimit ;
-   reghdfe EPS_P Ret DR c.Ret#DR 
-   Post Post#c.Ret Post#DR Post#c.Ret#DR
-   Treat Treat#c.Ret Treat#DR Treat#c.Ret#DR
-   Post_Treat Post_Treat#c.Ret Post_Treat#DR Post_Treat#c.Ret#DR
-   , absorb(i.Year i.Industry);
-   #delimit cr
-'
 stata(
-  src = stata_command_str2,
+  src = "code/robust03_PSM.do",
   data.in = matched_full
 )
+
 # rio::export(matched_full, file = file.path(output_path, "PSM-DID_2022-10-06.dta"))
+
+dbDisconnect(con_sqlite)
 
