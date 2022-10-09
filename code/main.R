@@ -124,6 +124,12 @@ stata(
   data.in = filter(merged_for_reg_reduced, Year >= 2016)
 )
 
+stata(
+  src = "code/analysis05_AM-new-rule.do",
+  data.in = filter(merged_for_reg_reduced, Year >= 2012)
+)
+
+
 dbDisconnect(con_sqlite)
 
 
