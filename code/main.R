@@ -120,7 +120,7 @@ stata(
 )
 
 stata(
-  src = "code/analysis03_mechanism-test.do",
+  src = "code/analysis03_heterogeneity-test.do",
   data.in = filter(merged_for_reg_reduced, Year >= 2016)
 )
 
