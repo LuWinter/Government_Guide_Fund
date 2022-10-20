@@ -14,7 +14,9 @@ make_score <- function(value_vec) {
 lag_n_year <- function(data, n, key, value, by) {
   data_copy <- data[, c(key, by, value)]
   data_copy[, c(by)] <- data_copy[, c(by)] + n
-  lag_suffix <- paste0("_lag", n)
+  lag_suffix <- ifelse(n >= 0, 
+                       paste0("_lag", n),
+                       paste0("_lagf", abs(n)))
   data <- dplyr::left_join(data, data_copy, 
                            by = c(key, by),
                            suffix = c("", lag_suffix))

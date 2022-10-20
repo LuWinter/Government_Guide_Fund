@@ -160,7 +160,7 @@ financial_sheet_more <- financial_sheet_more %>%
   )
 
 control_variables <- readRDS(
-  file.path(output_path, "control-variables_2022-10-06.rds")
+  file.path(output_path, "control-variables_2022-10-07.rds")
 )
 
 # corp_value$Year <- corp_value$Year + 1
@@ -320,12 +320,14 @@ matched_full <- matched_full %>%
   left_join(corp_province, by = c("Stkcd", "Year"))
 count(matched_full, Post, Treat)
 
-stata(
-  src = "code/robust03_PSM.do",
-  data.in = matched_full
-)
+# stata(
+#   src = "code/robust03_PSM.do",
+#   data.in = matched_full
+# )
 
-# rio::export(matched_full, file = file.path(output_path, "PSM-DID_2022-10-06.dta"))
+rio::export(matched_full, file = file.path(output_path, "PSM-DID_2022-10-17.dta"))
 
 dbDisconnect(con_sqlite)
+
+
 

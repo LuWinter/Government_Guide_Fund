@@ -98,15 +98,6 @@ saveRDS(
 # merged_for_reg <- readRDS(file.path(output_path, "merged-for-reg_2022-10-07.rds"))
 # merged_for_reg_reduced <- readRDS(file.path(output_path, "merged-for-reg-reduced_2022-10-07.rds"))
 
-stata_command <- "
-winsor2 Ret Size Lev MHRatio RDRatio GDP_p INS Age SuperINS, cuts(1 99) by(Year) trim
-"
-merged_for_reg_reduced <- stata(
-  src = stata_command,
-  data.in = merged_for_reg_reduced,
-  data.out = TRUE
-)
-
 
 # 2. 模型检验 -----------------------------------------------------------------
 stata(

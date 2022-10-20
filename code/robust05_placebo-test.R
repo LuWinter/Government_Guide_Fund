@@ -2,7 +2,7 @@
 ##############################################################
 # Programmer: Lu Winter
 # Date Created: 2022-10-09
-# Task: Input preprocessed data and perform analysis
+# Task: Perform placebo test
 ##############################################################
 
 

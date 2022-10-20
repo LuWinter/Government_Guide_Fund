@@ -16,7 +16,7 @@ rename Province Province_str
 rename Province2 Province
 
 
-winsor2 Ret Size MB Lev GDP_p SuperINS MHRatio, cuts(1 99) by(Year) trim
+winsor2 Size Lev GDP_p MHRatio Age, cuts(1 99) by(Year) replace
 
 
 
@@ -86,7 +86,6 @@ quietly estadd local fe_province "YES", replace
 quietly estadd local fe_indu_year "YES", replace
 quietly estadd local fe_prov_year "YES", replace
 
-
 #delimit ;
 eststo high_fe_control2:
 	quietly reghdfe EPS_P $base_reg $GGF_reg 
@@ -101,6 +100,13 @@ quietly estadd local fe_province "YES", replace
 quietly estadd local fe_indu_year "YES", replace
 quietly estadd local fe_prov_year "YES", replace
 
+#delimit ;
+quietly reghdfe EPS_P $base_reg $GGF_reg 
+	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg $CG_reg, 
+	absorb($common_fe $high_fe)
+    ;
+#delimit cr
+
 
 /*************************** Output Regression Result *************************/
 
@@ -108,7 +114,7 @@ global var_list "DR Ret 1.DR#c.Ret GGF 0.GGF#1.DR 1.GGF#c.Ret 1.GGF#1.DR#c.Ret"
 
 #delimit ;                               
 esttab fe_simple fe_control high_fe_control high_fe_control2
-	using robust01_simple-reg.rtf ,  
+	/* using robust01_simple-reg.rtf */,  
 	replace label nogap star(* 0.10 ** 0.05 *** 0.01) 
     keep($var_list) varwidth(15) b t(4) ar2(4) 
 	s(control fe_industry fe_year fe_province fe_indu_year fe_prov_year N r2_a, 
