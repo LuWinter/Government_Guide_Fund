@@ -1,4 +1,5 @@
 ### 一、预处理
+
 1. identify-corporation  
     确定分析样本  
     输出：identifier
@@ -12,9 +13,10 @@
 4. control-variables  
     计算控制变量  
     输出：control_variables  
-除了3和4依赖1，2、3、4是数据独立的
+   除了3和4依赖1，2、3、4是数据独立的
 
 ### 二、实证分析
+
 1. descriptive-table  
     描述性统计
 2. basic-test  
@@ -23,9 +25,14 @@
     机制检验
 
 ### 三、稳健性检验
-1. simple-reg  
-    只用经历过引导基金持股的企业样本
-2. hold-ratio  
+
+1. hold-ratio  
     用持股比例代替是否持股
-3. PSM  
-    1:1倾向性得分匹配引导基金持股样本
+2. other-model
+   
+   使用其他会计稳健性模型检验
+3. PSM-DID  
+    1:1倾向性得分匹配引导基金持股样本，再进行DID
+4. placebo-test
+   
+   安慰剂检验模拟5000次处理组样本
