@@ -28,7 +28,7 @@ gen GGF_DR_Ret = GGF * DR * Ret
 logout, save ("correlation") excel replace:
     pwcorr EPS_P GGF_DR_Ret Size Lev MHRatio Age GDP_p
     CG INS SuperINS RegionFin RDRatio StrategyScore,
-    star(.001)
+    star(.1)
     ;
 #delimit cr
 

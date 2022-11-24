@@ -132,7 +132,7 @@ quietly estadd local fe_prov_year "YES", replace
 
 /*************************** Output Regression Result *************************/
 
-global var_list "DNI_lag1 NI_lag1 1.DNI_lag1#c.NI_lag1 GGF 0.GGF#1.DNI_lag1 1.GGF#c.NI_lag1 1.GGF#1.DNI_lag1#c.NI_lag1"
+global var_list "_cons DNI_lag1 NI_lag1 1.DNI_lag1#c.NI_lag1 GGF 0.GGF#1.DNI_lag1 1.GGF#c.NI_lag1 1.GGF#1.DNI_lag1#c.NI_lag1"
 
 #delimit ;                               
 esttab fe_simple fe_control high_fe_control
@@ -145,7 +145,7 @@ esttab fe_simple fe_control high_fe_control
 #delimit cr
 
 
-global var_list2 "DCFO CFO 1.DCFO#c.CFO GGF 0.GGF#1.DCFO 1.GGF#c.CFO 1.GGF#1.DCFO#c.CFO"
+global var_list2 "_cons DCFO CFO 1.DCFO#c.CFO GGF 0.GGF#1.DCFO 1.GGF#c.CFO 1.GGF#1.DCFO#c.CFO"
 
 #delimit ;                               
 esttab fe_simple2 fe_control2 high_fe_control2

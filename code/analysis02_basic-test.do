@@ -1,8 +1,17 @@
 
-cd "~/Documents/R_Projects/Government_Guide_Fund/output/tables"
+/******************* Content *******************
+****** 0. Test Regression				  ******
+****** 1. Base Regression				  ******
+****** 2. Government Level                ******
+****** 3. Holding Ratio & Same Province   ******
+****** 4. Dispatch Directors			  ******
+****** 5. Risk Adversion                  ******
+***********************************************/
 
-* clear
-* use "merged_for_reg_reduced_19796.dta"
+
+/******************************** Preprocession ********************************/
+
+cd "~/Documents/R_Projects/Government_Guide_Fund/output/tables"
 
 destring Stkcd, replace
 xtset Stkcd Year
@@ -16,14 +25,7 @@ rename Province Province_str
 rename Province2 Province
 gen same_province = strmatch(GGFProvince, Province_str)
 
-
-tab Year
-tab Year GGF
-display _N
-
-
-winsor2 Ret Size Lev MHRatio RDRatio GDP_p INS Age SuperINS, cuts(1 99) by(Year) trim
-
+winsor2 Size Lev MHRatio RDRatio GDP_p INS Age SuperINS, cuts(1 99) by(Year) trim replace
 
 
 /******************************* Macros Defination ****************************/
@@ -46,7 +48,7 @@ global common_fe "i.Year i.Industry i.Province"
 global high_fe "i.Year#i.Industry i.Year#i.Province"
 
 
-/******************************* Test Regression ****************************/
+/******************************* 0. Test Regression ****************************/
 #delimit ;
 eststo test_size:
 	quietly reghdfe EPS_P $base_reg $Size_reg,
@@ -62,8 +64,8 @@ eststo test_lev:
 #delimit cr
 
 #delimit ;
-eststo test_soe:
- 	quietly reghdfe EPS_P $base_reg $SOE_reg,
+eststo test_age:
+ 	quietly reghdfe EPS_P $base_reg $Age_reg,
 	absorb($common_fe $high_fe)
 	vce(cl Stkcd);
 #delimit cr
@@ -75,20 +77,18 @@ eststo test_mhratio:
 	vce(cl Stkcd);
 #delimit cr
 
-
 #delimit ;                               
 esttab test*          
-    using test_regression.rtf      ,  
+    using main-analysis00_test-regression.rtf      ,  
 	replace label nogap star(* 0.10 ** 0.05 *** 0.01) 
 	varwidth(15) b t(4) ar2(4) nobaselevels
 	s(control fe_industry fe_year fe_province fe_indu_year fe_prov_year N r2_a, 
 	  label("Obs" "adjusted-R2"))	
-    mtitle("Size" "Lev" "SOE" "MHRatio");
+    mtitle("Size" "Lev" "Age" "MHRatio");
 #delimit cr
 
 
-
-/******************************* Base Regression ****************************/
+/******************************* 1. Base Regression ****************************/
 #delimit ;
 eststo simple_ols:
 	quietly reg EPS_P $base_reg $GGF_reg
@@ -149,104 +149,8 @@ quietly estadd local fe_province "YES", replace
 quietly estadd local fe_indu_year "YES", replace
 quietly estadd local fe_prov_year "YES", replace
 
-             
-/******************************* No First-Hold Year Regression ****************************/
-/* tab IsFirstHold GGF
- 
-#delimit ;
-eststo no_first_year:
-	quietly reghdfe EPS_P $base_reg $GGF_reg       
-    if IsFirstHold != 1,        
-    absorb($common_fe)   
-    ;
-#delimit cr
-quietly estadd local control "NO", replace
-quietly estadd local fe_industry "YES", replace
-quietly estadd local fe_year "YES", replace
-quietly estadd local fe_province "YES", replace
-quietly estadd local fe_indu_year "NO", replace
-quietly estadd local fe_prov_year "NO", replace
 
-#delimit ;
-eststo no_first_year_control:
-	quietly reghdfe EPS_P $base_reg $GGF_reg 
-	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg
-    if IsFirstHold != 1,        
-    absorb($common_fe $high_fe)
-    ;
-#delimit cr
-quietly estadd local control "YES", replace
-quietly estadd local fe_industry "YES", replace
-quietly estadd local fe_year "YES", replace
-quietly estadd local fe_province "YES", replace
-quietly estadd local fe_indu_year "YES", replace
-quietly estadd local fe_prov_year "YES", replace
-
-#delimit ;  
-eststo only_first_year:
-	quietly reghdfe EPS_P $base_reg $GGF_reg       
-    if IsFirstHold != 0,        
-    absorb($common_fe)   
-    ;
-#delimit cr
-quietly estadd local control "NO", replace
-quietly estadd local fe_industry "YES", replace
-quietly estadd local fe_year "YES", replace
-quietly estadd local fe_province "YES", replace
-quietly estadd local fe_indu_year "NO", replace
-quietly estadd local fe_prov_year "NO", replace
-
-#delimit ;     
-eststo only_first_year_control:        
-	quietly reghdfe EPS_P $base_reg $GGF_reg 
-	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg  
-    if IsFirstHold != 0,        
-    absorb($common_fe $high_fe)   
-    ;
-#delimit cr
-quietly estadd local control "YES", replace
-quietly estadd local fe_industry "YES", replace
-quietly estadd local fe_year "YES", replace
-quietly estadd local fe_province "YES", replace
-quietly estadd local fe_indu_year "YES", replace
-quietly estadd local fe_prov_year "YES", replace */
-
-           
-/******************************* No Minority-Holder Regression ****************************/
-tab HoldRank
-
-#delimit ;
-eststo no_minority_holder:
-	quietly reghdfe EPS_P $base_reg $GGF_reg 
-	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg
-    if (HoldRank <= 5 | HoldRank == .),   
-    absorb($common_fe $high_fe)   
-    ;
-#delimit cr
-quietly estadd local control "YES", replace
-quietly estadd local fe_industry "YES", replace
-quietly estadd local fe_year "YES", replace
-quietly estadd local fe_province "YES", replace
-quietly estadd local fe_indu_year "YES", replace
-quietly estadd local fe_prov_year "YES", replace
-
-#delimit ;
-eststo minority_holder:
-	quietly reghdfe EPS_P $base_reg $GGF_reg 
-	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg
-    if (HoldRank > 5 | HoldRank == .),        
-    absorb($common_fe $high_fe)  
-    ;
-#delimit cr
-quietly estadd local control "YES", replace
-quietly estadd local fe_industry "YES", replace
-quietly estadd local fe_year "YES", replace
-quietly estadd local fe_province "YES", replace
-quietly estadd local fe_indu_year "YES", replace
-quietly estadd local fe_prov_year "YES", replace
-
-  
-/******************************* GGF Level Result ****************************/                    
+/******************************* 2. Government Level ****************************/                    
 tab GGFLevel
 
 #delimit ;
@@ -307,10 +211,38 @@ quietly estadd local fe_province "YES", replace
 quietly estadd local fe_indu_year "YES", replace
 quietly estadd local fe_prov_year "YES", replace
 
+           
+/************************** 3. Holding Ratio & Same Province ***********************/
 
-/******************************* Same GGF Province ****************************/
-tab same_province GGF
-tab Year same_province
+#delimit ;
+eststo no_minority_holder:
+	quietly reghdfe EPS_P $base_reg $GGF_reg 
+	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg
+    if (HoldRank <= 5 | HoldRank == .),   
+    absorb($common_fe $high_fe)   
+    ;
+#delimit cr
+quietly estadd local control "YES", replace
+quietly estadd local fe_industry "YES", replace
+quietly estadd local fe_year "YES", replace
+quietly estadd local fe_province "YES", replace
+quietly estadd local fe_indu_year "YES", replace
+quietly estadd local fe_prov_year "YES", replace
+
+#delimit ;
+eststo minority_holder:
+	quietly reghdfe EPS_P $base_reg $GGF_reg 
+	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg
+    if (HoldRank > 5 | HoldRank == .),        
+    absorb($common_fe $high_fe)  
+    ;
+#delimit cr
+quietly estadd local control "YES", replace
+quietly estadd local fe_industry "YES", replace
+quietly estadd local fe_year "YES", replace
+quietly estadd local fe_province "YES", replace
+quietly estadd local fe_indu_year "YES", replace
+quietly estadd local fe_prov_year "YES", replace
 
 #delimit ;
 eststo same_province:
@@ -343,8 +275,104 @@ quietly estadd local fe_indu_year "YES", replace
 quietly estadd local fe_prov_year "YES", replace
 
 
+/******************************* 4. Dispatch Directors ****************************/
+tab Related
+
+#delimit ;
+eststo dispatch_director:
+	quietly reghdfe EPS_P $base_reg $GGF_reg 
+    if Related > 0 | GGF == 0, 
+	absorb($common_fe)   
+    ;
+#delimit cr
+quietly estadd local control "NO", replace
+quietly estadd local fe_industry "YES", replace
+quietly estadd local fe_year "YES", replace
+quietly estadd local fe_province "YES", replace
+quietly estadd local fe_indu_year "NO", replace
+quietly estadd local fe_prov_year "NO", replace
+
+#delimit ;
+eststo dispatch_director_control:
+	quietly reghdfe EPS_P $base_reg $GGF_reg 
+	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg 
+    if Related > 0 | GGF == 0, 
+	absorb($common_fe $high_fe)   
+    ;
+#delimit cr
+quietly estadd local control "YES", replace
+quietly estadd local fe_industry "YES", replace
+quietly estadd local fe_year "YES", replace
+quietly estadd local fe_province "YES", replace
+quietly estadd local fe_indu_year "YES", replace
+quietly estadd local fe_prov_year "YES", replace
+
+#delimit ;
+eststo no_director:
+	quietly reghdfe EPS_P $base_reg $GGF_reg 
+    if Related == 0 | GGF == 0, 
+	absorb($common_fe)   
+    ;
+#delimit cr
+quietly estadd local control "NO", replace
+quietly estadd local fe_industry "YES", replace
+quietly estadd local fe_year "YES", replace
+quietly estadd local fe_province "YES", replace
+quietly estadd local fe_indu_year "NO", replace
+quietly estadd local fe_prov_year "NO", replace
+
+#delimit ;
+eststo no_director_control:
+	quietly reghdfe EPS_P $base_reg $GGF_reg 
+	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg
+    if Related == 0 | GGF == 0, 
+	absorb($common_fe $high_fe)   
+    ;
+#delimit cr
+quietly estadd local control "YES", replace
+quietly estadd local fe_industry "YES", replace
+quietly estadd local fe_year "YES", replace
+quietly estadd local fe_province "YES", replace
+quietly estadd local fe_indu_year "YES", replace
+quietly estadd local fe_prov_year "YES", replace
+
+
+/******************************* 5. Risk Aversion ****************************/
+global Risk_reg "Risk c.Risk#DR c.Risk#c.Ret c.Risk#DR#c.Ret"
+
+gen Risk = sdROA3 * 100
+#delimit ;
+eststo risk_roa:
+	reghdfe EPS_P $base_reg  $Risk_reg
+	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg
+    if GGF == 1,        
+    absorb(i.Stkcd i.Year)   
+    ;
+#delimit cr
+quietly estadd local control "YES", replace
+quietly estadd local fe_stkcd "YES", replace
+quietly estadd local fe_year "YES", replace
+
+drop Risk 
+gen Risk = sdROE3 * 100
+#delimit ;
+eststo risk_roe:
+	quietly reghdfe EPS_P $base_reg  $Risk_reg
+	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg
+    if GGF == 1,        
+    absorb(i.Stkcd i.Year)   
+    ;
+#delimit cr
+quietly estadd local control "YES", replace
+quietly estadd local fe_stkcd "YES", replace
+quietly estadd local fe_year "YES", replace
+
+
+
 /******************************* Output Regression Result ****************************/
-global var_list "DR Ret 1.DR#c.Ret GGF 0.GGF#1.DR 1.GGF#c.Ret 1.GGF#1.DR#c.Ret"
+
+global var_list "_cons DR Ret 1.DR#c.Ret GGF 0.GGF#1.DR 1.GGF#c.Ret 1.GGF#1.DR#c.Ret"
+global var_list2 "_cons DR Ret 1.DR#c.Ret Risk 1.DR#c.Risk c.Risk#c.Ret 1.DR#c.Risk#c.Ret"
 
 
 #delimit ;                               
@@ -358,17 +386,6 @@ esttab simple_ols simple_fe simple_high_fe control_ols control_high_fe
     mtitle("Simple OLS" "Simple FE" "Simple High FE" "Control OLS" "Control High FE");
 #delimit cr
 
-/* #delimit ;
-esttab no_first*   only_first*                   
-    using no_first_year_regression.rtf         ,
-	replace label nogap star(* 0.10 ** 0.05 *** 0.01)
-    keep($var_list) varwidth(15) b t(4) ar2(4) 
-	s(control fe_industry fe_year fe_province fe_indu_year fe_prov_year N r2_a, 
-	  label("Control Variables" "Industry FE" "Year FE" "Province FE" 
-			"Industry ✖ Year FE" "Province ✖ Year FE" "Obs" "adjusted-R2"))	
-    mtitle("No First Year" "No First Year (Control)" "Only First Year" "Only First Year (Control)");
-#delimit cr */
-
 #delimit ;           
 esttab no_country*   only_country*               
     using main-analysis02_country-level.rtf, 
@@ -379,15 +396,36 @@ esttab no_country*   only_country*
 			"Industry ✖ Year FE" "Province ✖ Year FE" "Obs" "adjusted-R2"))	
     mtitle("No Country GGF" "No Country GGF (Control)" "Only Country GGF" "Only Country GGF (Control)");
 #delimit cr
-	
+
 #delimit ;
 esttab no_minority_holder minority_holder same_province no_same_province       
-    using main-analysis03_minitory-province.rtf, 
+    using main-analysis03_holding-ratio-and-same-province.rtf, 
 	replace label nogap star(* 0.10 ** 0.05 *** 0.01) 
     keep($var_list) varwidth(15) b t(4) ar2(4) 
 	s(control fe_industry fe_year fe_province fe_indu_year fe_prov_year N r2_a, 
 	  label("Control Variables" "Industry FE" "Year FE" "Province FE" 
 			"Industry ✖ Year FE" "Province ✖ Year FE" "Obs" "adjusted-R2"))	
     mtitle("No Minority" "Only Minority" "Only Same Province" "No Same Province");
+#delimit cr
+
+#delimit ;           
+esttab dispatch_director* no_director*              
+    using main-analysis04_dispatch-directors.rtf, 
+	replace label nogap star(* 0.10 ** 0.05 *** 0.01) 
+    keep($var_list) varwidth(15) b t(4) ar2(4) 
+	s(control fe_industry fe_year fe_province fe_indu_year fe_prov_year N r2_a, 
+	  label("Control Variables" "Industry FE" "Year FE" "Province FE" 
+			"Industry ✖ Year FE" "Province ✖ Year FE" "Obs" "adjusted-R2"))	
+    mtitle("Dispatch Director" "Dispatch Director CT" "No Director" "No Director CT");
+#delimit cr
+
+#delimit ;
+esttab risk_roa risk_roe               
+    using main-analysis05_risk-aversion.rtf         ,
+	replace label nogap star(* 0.10 ** 0.05 *** 0.01)
+    keep($var_list2) varwidth(15) b t(4) ar2(4) 
+	s(control fe_stkcd fe_year N r2_a, 
+	  label("Control Variables" "Stkcd FE" "Year FE" "Obs" "adjusted-R2"))	
+    mtitle("ROA" "ROE");
 #delimit cr
 

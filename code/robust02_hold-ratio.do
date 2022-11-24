@@ -58,6 +58,19 @@ quietly estadd local fe_prov_year "NO", replace
 
 #delimit ;
 eststo fe_control:
+	quietly reghdfe EPS_P $base_reg $GGF_reg,
+	absorb($common_fe $high_fe)
+    ;
+#delimit cr
+quietly estadd local control "NO", replace
+quietly estadd local fe_industry "YES", replace
+quietly estadd local fe_year "YES", replace
+quietly estadd local fe_province "YES", replace
+quietly estadd local fe_indu_year "YES", replace
+quietly estadd local fe_prov_year "YES", replace
+
+#delimit ;
+eststo high_fe_control:
 	quietly reghdfe EPS_P $base_reg $GGF_reg 
 	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg, 
 	absorb($common_fe)
@@ -69,20 +82,6 @@ quietly estadd local fe_year "YES", replace
 quietly estadd local fe_province "YES", replace
 quietly estadd local fe_indu_year "NO", replace
 quietly estadd local fe_prov_year "NO", replace
-
-#delimit ;
-eststo high_fe_control:
-	quietly reghdfe EPS_P $base_reg $GGF_reg 
-	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg, 
-	absorb($common_fe $high_fe)
-    ;
-#delimit cr
-quietly estadd local control "YES", replace
-quietly estadd local fe_industry "YES", replace
-quietly estadd local fe_year "YES", replace
-quietly estadd local fe_province "YES", replace
-quietly estadd local fe_indu_year "YES", replace
-quietly estadd local fe_prov_year "YES", replace
 
 
 #delimit ;
@@ -102,7 +101,7 @@ quietly estadd local fe_prov_year "YES", replace
 
 /*************************** Output Regression Result *************************/
 
-global var_list "DR Ret 1.DR#c.Ret HoldRatio 1.DR#c.HoldRatio c.HoldRatio#c.Ret 1.DR#c.HoldRatio#c.Ret"
+global var_list "_cons DR Ret 1.DR#c.Ret HoldRatio 1.DR#c.HoldRatio c.HoldRatio#c.Ret 1.DR#c.HoldRatio#c.Ret"
 
 #delimit ;                               
 esttab fe_simple fe_control high_fe_control high_fe_control2

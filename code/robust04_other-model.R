@@ -46,23 +46,13 @@ merged_for_reg_reduced <- readRDS(
 
 con_fin <- dbConnect(
   drv = RSQLite::SQLite(), 
-  "../Common/Financial-Sheets/financial_sheets.sqlite"
+  "../Data-for-Accounting-Research/accounting_data.sqlite"
 )
 dbListTables(con_fin)
 
-balance_sheet_db <- tbl(con_fin, "balance_sheet")
-income_statement_db <- tbl(con_fin, "income_statement")
-cash_flow_db <- tbl(con_fin, "cash_flow_statement")
+financial_sheet_db <- tbl(con_fin, "financial_sheet")
 
-robust_data <- balance_sheet_db %>% 
-  left_join(
-    y = income_statement_db,
-    by = c("Stkcd", "Year")
-  ) %>% 
-  left_join(
-    y = cash_flow_db,
-    by = c("Stkcd", "Year")
-  ) %>% 
+robust_data <- financial_sheet_db %>% 
   select(
     Stkcd, 
     Year,
@@ -116,7 +106,7 @@ merged_for_reg_reduced %>%
   ) %>% 
   filter(Year >= 2016) %>% 
   stata(
-    src = "code/robust04_C-score.do",
+    src = "code/robust04_other-model.do",
     data.in = .
   )
 

@@ -14,6 +14,7 @@ library(RStata)
 library(purrr)
 library(DBI)
 library(lubridate)
+library(stringr)
 
 ## 预定义输入输出路径
 data_path <- "data"
@@ -49,11 +50,14 @@ control_variables <- control_variables %>%
 accounting_conservatism <- accounting_conservatism %>% 
   mutate(Year = Year - 1)
 ### 所有的解释变量都要滞后一期
+### 例如：16年的解释变量匹配17年的会计稳健性
 
 merged_for_reg <- identifier %>% 
   left_join(accounting_conservatism, by = c("Stkcd", "Year")) %>% 
-  select(Stkcd, Year, G_Score, C_Score, EPS, YearOpen, YearClose, 
-         Ret, DR, Size, MB, Lev) %>% 
+  select(
+    Stkcd, Year, G_Score, C_Score, EPS, 
+    YearOpen, YearClose, Ret, DR, Size, MB, Lev
+  ) %>% 
   left_join(merged_Big10SH_GGF_nodupl, by = c("Stkcd", "Year")) %>% 
   mutate(GGF = ifelse(is.na(GGF), 0, 1)) %>% 
   filter(Year >= 2012) %>% 
@@ -96,10 +100,59 @@ saveRDS(
   file = file.path(output_path, paste0("merged-for-reg-reduced_", today(), ".rds"))
 )
 # merged_for_reg <- readRDS(file.path(output_path, "merged-for-reg_2022-10-07.rds"))
-# merged_for_reg_reduced <- readRDS(file.path(output_path, "merged-for-reg-reduced_2022-10-07.rds"))
+merged_for_reg_reduced <- readRDS(file.path(output_path, "merged-for-reg-reduced_2022-10-07.rds"))
 
 
-# 2. 模型检验 -----------------------------------------------------------------
+# 2. 增补的数据 ----------------------------------------------------------------
+
+### 董监高派遣
+GGF_related <- readRDS(
+  file = "../Data-for-Accounting-Research/data/gov-guide-fund/GGF_related.rds"
+)
+GGF_related_processed <- GGF_related %>% 
+  mutate(
+    Related = Director + JianShi
+  ) %>% 
+  group_by(Stkcd, Year) %>% 
+  summarise(Related = sum(Related)) %>% 
+  ungroup()
+merged_for_reg_reduced <- merged_for_reg_reduced %>% 
+  left_join(
+    x = .,
+    y = GGF_related_processed,
+    by = c("Stkcd", "Year")
+  )
+### 风险规避
+return_volatility <- readRDS(
+  file = "../Data-for-Accounting-Research/data/2022-11-21_return-volatility.rds"
+)
+return_volatility <- return_volatility %>% 
+  select(
+    Stkcd,
+    Year,
+    contains("sd")
+  )
+merged_for_reg_reduced <- merged_for_reg_reduced %>% 
+  left_join(
+    x = .,
+    y = return_volatility,
+    by = c("Stkcd", "Year") 
+  )
+### 公司战略得分（重新制作）
+corp_strategy <- readRDS(
+  file = "../Data-for-Accounting-Research/temp/strategy_score.rds"
+)
+merged_for_reg_reduced <- merged_for_reg_reduced %>% 
+  select(-StrategyScore) %>% 
+  left_join(
+    x = .,
+    y = corp_strategy[c("Stkcd", "Year", "StrategyScore")],
+    by = c("Stkcd", "Year")
+  )
+
+
+# 3. 模型检验 -----------------------------------------------------------------
+
 stata(
   src = "code/analysis01_descriptive-table.do",
   data.in = filter(merged_for_reg_reduced, Year >= 2016)
@@ -122,5 +175,38 @@ stata(
 
 
 dbDisconnect(con_sqlite)
+
+
+# temp_sample <- merged_for_reg_reduced %>%
+#   filter(Year >= 2016) %>%
+#   stata(
+#     src = '
+#       gen EPS_P = EPS / YearOpen
+#       gen IndustryCode2 = cond(substr(IndustryCode, 1, 1) != "C", substr(IndustryCode, 1, 1), substr(IndustryCode, 1, 2))
+#       egen Industry = group(IndustryCode2)
+# 
+#       egen Province2 = group(Province)
+#       rename Province Province_str
+#       rename Province2 Province
+#       gen same_province = strmatch(GGFProvince, Province_str)
+# 
+#       winsor2 Size Lev MHRatio RDRatio GDP_p INS Age SuperINS, cuts(1 99) by(Year) trim replace
+#     ',
+#     data.in = .,
+#     data.out = TRUE
+#   ) %>% 
+#   filter(GGF == 1)
+# 
+# temp_sample %>%
+#   fixest::feols(
+#     fml = EPS_P ~
+#       DR*Ret*sdROA3 + DR*Ret*Size + DR*Ret*Lev + 
+#       DR*Ret*MHRatio + DR*Ret*Age + DR*Ret*GDP_p|
+#       Stkcd + Year,
+#     vcov = "iid",
+#     panel.id = c("Stkcd", "Year"),
+#     data = .
+#     ) %>%
+#   summary()
 
 

@@ -1,8 +1,16 @@
 
-cd "~/Documents/R_Projects/Government_Guide_Fund/output/tables"
+/***************** Content *****************
+****** 1. Corporate Governance	      ******
+****** 2. Institution Hold            ******
+****** 3. Regional Finance    		  ******
+****** 4. R&D Investment			  ******
+****** 5. Corporate Strateg           ******
+*******************************************/
 
-* clear
-* use "merged_for_reg_reduced_19796.dta"
+
+/******************************** Preprocession ********************************/
+
+cd "~/Documents/R_Projects/Government_Guide_Fund/output/tables"
 
 destring Stkcd, replace
 xtset Stkcd Year
@@ -16,14 +24,9 @@ rename Province Province_str
 rename Province2 Province
 gen same_province = strmatch(GGFProvince, Province_str)
 
-
-tab Year
-tab Year GGF
 display _N
 
-
-winsor2 Ret Size MB Lev GDP_p SuperINS RDRatio, cuts(1 99) by(Year) trim
-
+winsor2 Size MB Lev GDP_p SuperINS RDRatio, cuts(1 99) by(Year) trim replace
 
 
 /******************************* Macros Defination ****************************/
@@ -47,7 +50,8 @@ global high_fe "i.Year#i.Industry i.Year#i.Province"
 
 
 
-/****************************** Corporate Governance **************************/
+/****************************** 1. Corporate Governance **************************/
+
 egen CG_p50 = pctile(CG), p(50)
 gen CG_d = 1 if CG >= CG_p50 & CG != .
 replace CG_d = 0 if CG < CG_p50
@@ -112,7 +116,8 @@ quietly estadd local fe_indu_year "YES", replace
 quietly estadd local fe_prov_year "YES", replace
 
                          
-/******************************* Institution Hold *****************************/                         
+/******************************* 2. Institution Hold *****************************/      
+
 egen INS_p50 = pctile(INS), p(50)
 gen INS_d = 1 if INS >= INS_p50 & INS != .
 replace INS_d = 0 if INS < INS_p50
@@ -179,7 +184,8 @@ quietly estadd local fe_indu_year "YES", replace
 quietly estadd local fe_prov_year "YES", replace
 
    
-/******************************* Regional Finance *****************************/
+/******************************* 3. Regional Finance *****************************/
+
 #delimit ;
 eststo high_fin:
 	quietly reghdfe EPS_P $base_reg $GGF_reg   	
@@ -237,78 +243,10 @@ quietly estadd local fe_year "YES", replace
 quietly estadd local fe_province "YES", replace
 quietly estadd local fe_indu_year "YES", replace
 quietly estadd local fe_prov_year "YES", replace
-
-	
-/******************************** Gov Subsidies *******************************/                    
-/* egen Subsidies_p50 = pctile(Subsidies_size), p(50)
-gen Subsidies_d = 1 if Subsidies_size >= Subsidies_p50 & Subsidies_size != .
-replace Subsidies_d = 0 if Subsidies_size < Subsidies_p50
-
-display _N                         
-tab Subsidies_d GGF
-                                 
-spearman Subsidies_size GGF C_Score, star(0.05)
-
-#delimit ;
-eststo low_subsi:
-	quietly reghdfe EPS_P $base_reg $GGF_reg   
-    if Subsidies_d == 0, 				
-	absorb($common_fe)   				
-    ;
-#delimit cr
-quietly estadd local control "NO", replace
-quietly estadd local fe_industry "YES", replace
-quietly estadd local fe_year "YES", replace
-quietly estadd local fe_province "YES", replace
-quietly estadd local fe_indu_year "NO", replace
-quietly estadd local fe_prov_year "NO", replace
-
-#delimit ;
-eststo high_subsi:
-	quietly reghdfe EPS_P $base_reg $GGF_reg 
-    if Subsidies_d == 1, 				
-	absorb($common_fe) 
-    ;
-#delimit cr
-quietly estadd local control "NO", replace
-quietly estadd local fe_industry "YES", replace
-quietly estadd local fe_year "YES", replace
-quietly estadd local fe_province "YES", replace
-quietly estadd local fe_indu_year "NO", replace
-quietly estadd local fe_prov_year "NO", replace
-
-#delimit ;
-eststo low_subsi_ct:
-	quietly reghdfe EPS_P $base_reg $GGF_reg 	
-	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg   
-    if Subsidies_d == 0, 				
-	absorb($common_fe $high_fe)   		
-    ;
-#delimit cr
-quietly estadd local control "YES", replace
-quietly estadd local fe_industry "YES", replace
-quietly estadd local fe_year "YES", replace
-quietly estadd local fe_province "YES", replace
-quietly estadd local fe_indu_year "YES", replace
-quietly estadd local fe_prov_year "YES", replace
-
-#delimit ;
-eststo high_subsi_ct:
-	quietly reghdfe EPS_P $base_reg $GGF_reg	
-	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg  
-    if Subsidies_d == 1, 				
-	absorb($common_fe $high_fe)   		
-    ;
-#delimit cr
-quietly estadd local control "YES", replace
-quietly estadd local fe_industry "YES", replace
-quietly estadd local fe_year "YES", replace
-quietly estadd local fe_province "YES", replace
-quietly estadd local fe_indu_year "YES", replace
-quietly estadd local fe_prov_year "YES", replace */
                                 
 								
-/******************************** R&D Strength *******************************/                    
+/******************************** 4. R&D Investment *******************************/
+
 egen rd_p50 = pctile(RDRatio), p(50)
 gen rd_d = 1 if RDRatio >= rd_p50 & RDRatio != .
 replace rd_d = 0 if RDRatio < rd_p50
@@ -376,20 +314,16 @@ quietly estadd local fe_indu_year "YES", replace
 quietly estadd local fe_prov_year "YES", replace
                                 
 								
+/********************************* 5. Corp Strategy ******************************/             
 
-								
-/********************************* Corp Strategy ******************************/                    
-egen Strategy_p50 = pctile(StrategyScore), p(25)
-gen Strategy_d = 1 if StrategyScore >= Strategy_p50 & StrategyScore != .
-replace Strategy_d = 0 if StrategyScore < Strategy_p50                            
-
-display _N
-tab Strategy_d GGF
+egen ss_p50 = pctile(StrategyScore), p(66)
+gen ss_d = 1 if StrategyScore > 21 & StrategyScore != .
+replace ss_d = 0 if StrategyScore <= 21
 
 #delimit ;
 eststo high_stra:                                
 	reghdfe EPS_P $base_reg $GGF_reg   	
-    if Strategy_d == 1, 				
+    if ss_d == 1, 				
 	absorb($common_fe)				   	
     ;
 #delimit cr
@@ -404,7 +338,7 @@ quietly estadd local fe_prov_year "NO", replace
 #delimit ;
 eststo low_stra:   
 	reghdfe EPS_P $base_reg $GGF_reg 
-    if Strategy_d == 0, 			   	
+    if ss_d == 0, 			   	
 	absorb($common_fe) 				  
     ;
 #delimit cr
@@ -418,8 +352,8 @@ quietly estadd local fe_prov_year "NO", replace
 #delimit ;
 eststo high_stra_ct:
 	quietly reghdfe EPS_P $base_reg $GGF_reg	
-	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg  
-    if Strategy_d == 1, 				
+	$Size_reg $SuperINS_reg $MHRatio_reg $Age_reg $GDP_reg  
+    if ss_d == 1, 				
 	absorb($common_fe $high_fe)			
     ;
 #delimit cr
@@ -433,8 +367,8 @@ quietly estadd local fe_prov_year "YES", replace
 #delimit ;
 eststo low_stra_ct:                         
 	quietly reghdfe EPS_P $base_reg $GGF_reg  	
-	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg
-    if Strategy_d == 0, 				
+	$Size_reg $SuperINS_reg $MHRatio_reg $Age_reg $GDP_reg
+    if ss_d == 0, 				
 	absorb($common_fe $high_fe)			
     ;
 #delimit cr
@@ -446,17 +380,12 @@ quietly estadd local fe_indu_year "YES", replace
 quietly estadd local fe_prov_year "YES", replace
 
 
-/********************************* ESG Group ******************************/
-/* gen ESG_d = 0 if ESGRating != "NA"
-replace ESG_d = 1 if ESGRating == "AAA" | ESGRating == "AA" | ESGRating == "A"
-
-display _N
-tab ESG_d GGF
+/********************************* 5. Corp Strategy ******************************/             
 
 #delimit ;
-eststo high_esg:                                
+eststo state_owned:                                
 	reghdfe EPS_P $base_reg $GGF_reg   	
-    if ESG_d == 1, 				
+    if SOE == 1, 				
 	absorb($common_fe)				   	
     ;
 #delimit cr
@@ -469,9 +398,9 @@ quietly estadd local fe_prov_year "NO", replace
 
 
 #delimit ;
-eststo low_esg:   
+eststo privity_owned:   
 	reghdfe EPS_P $base_reg $GGF_reg 
-    if ESG_d == 0, 			   	
+    if SOE == 0, 			   	
 	absorb($common_fe) 				  
     ;
 #delimit cr
@@ -483,10 +412,10 @@ quietly estadd local fe_indu_year "NO", replace
 quietly estadd local fe_prov_year "NO", replace
 
 #delimit ;
-eststo high_esg_ct:
+eststo state_owned_ct:
 	quietly reghdfe EPS_P $base_reg $GGF_reg	
-	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg  
-    if ESG_d == 1, 				
+	$Size_reg $SuperINS_reg $MHRatio_reg $Age_reg $GDP_reg  
+    if SOE == 1, 				
 	absorb($common_fe $high_fe)			
     ;
 #delimit cr
@@ -498,10 +427,10 @@ quietly estadd local fe_indu_year "YES", replace
 quietly estadd local fe_prov_year "YES", replace
 
 #delimit ;
-eststo low_esg_ct:                         
+eststo privity_owned_ct:                         
 	quietly reghdfe EPS_P $base_reg $GGF_reg  	
-	$Size_reg $Lev_reg $MHRatio_reg $Age_reg $GDP_reg
-    if ESG_d == 0, 				
+	$Size_reg $SuperINS_reg $MHRatio_reg $Age_reg $GDP_reg
+    if SOE == 0, 				
 	absorb($common_fe $high_fe)			
     ;
 #delimit cr
@@ -510,15 +439,18 @@ quietly estadd local fe_industry "YES", replace
 quietly estadd local fe_year "YES", replace
 quietly estadd local fe_province "YES", replace
 quietly estadd local fe_indu_year "YES", replace
-quietly estadd local fe_prov_year "YES", replace */
-                                 
+quietly estadd local fe_prov_year "YES", replace
+
+
+
                               
 /********************************* Output Result ******************************/
-global var_list "DR Ret 1.DR#c.Ret GGF 0.GGF#1.DR 1.GGF#c.Ret 1.GGF#1.DR#c.Ret"
+
+global var_list "_cons DR Ret 1.DR#c.Ret GGF 0.GGF#1.DR 1.GGF#c.Ret 1.GGF#1.DR#c.Ret"
 
 #delimit ;                    
 esttab high_cg low_cg high_cg_ct low_cg_ct
-    using further-analysis01_cg-group.rtf      ,                   	
+    using further-analysis01_corp-governance.rtf      ,                   	
     replace label nogap star(* 0.10 ** 0.05 *** 0.01) 
 	keep($var_list) varwidth(15) b t(4) ar2(4) 
 	s(control fe_industry fe_year fe_province fe_indu_year fe_prov_year N r2_a, 
@@ -529,7 +461,7 @@ esttab high_cg low_cg high_cg_ct low_cg_ct
 
 #delimit ;
 esttab high_ins low_ins high_ins_ct low_ins_ct 
-    using further-analysis02_insti-group.rtf   ,                     	
+    using further-analysis02_institution-hold.rtf   ,                     	
     replace label nogap star(* 0.10 ** 0.05 *** 0.01) 
 	keep($var_list) varwidth(15) b t(4) ar2(4) 
 	s(control fe_industry fe_year fe_province fe_indu_year fe_prov_year N r2_a, 
@@ -549,20 +481,9 @@ esttab high_fin low_fin high_fin_ct low_fin_ct
     mtitle("High Finance" "Low Finance" "High Finance (Control)" "Low Finance (Control)");
 #delimit cr
 
-/* #delimit ;
-esttab high_subsi low_subsi high_subsi_ct low_subsi_ct
-    using subsi_group_regression.rtf   ,                    
-    replace label nogap star(* 0.10 ** 0.05 *** 0.01) 
-	keep($var_list) varwidth(15) b t(4) ar2(4) 
-	s(control fe_industry fe_year fe_province fe_indu_year fe_prov_year N r2_a, 
-	  label("Control Variables" "Industry FE" "Year FE" "Province FE" 
-			"Industry ✖ Year FE" "Province ✖ Year FE" "Obs" "adjusted-R2"))		
-    mtitle("High Subsidies" "Low Subsidies" "High Subsidies (Control)" "Low Subsidies (Control)");
-#delimit cr */
-
 #delimit ;
 esttab high_rd low_rd high_rd_ct low_rd_ct
-    using further-analysis04_rd-group.rtf   ,                    
+    using further-analysis04_rd-investment.rtf   ,                    
     replace label nogap star(* 0.10 ** 0.05 *** 0.01) 
 	keep($var_list) varwidth(15) b t(4) ar2(4) 
 	s(control fe_industry fe_year fe_province fe_indu_year fe_prov_year N r2_a, 
@@ -571,27 +492,24 @@ esttab high_rd low_rd high_rd_ct low_rd_ct
     mtitle("High R&D" "Low R&D" "High R&D (Control)" "Low R&D (Control)");
 #delimit cr
 
-
 #delimit ;         
 esttab high_stra low_stra high_stra_ct low_stra_ct	
-    using further-analysis05_strategy-group.rtf  ,                                	
+    using further-analysis05_corp-strategy.rtf  ,                                	
     replace label nogap star(* 0.10 ** 0.05 *** 0.01) 
 	keep($var_list) varwidth(15) b t(4) ar2(4) 
 	s(control fe_industry fe_year fe_province fe_indu_year fe_prov_year N r2_a, 
 	  label("Control Variables" "Industry FE" "Year FE" "Province FE" 
 			"Industry ✖ Year FE" "Province ✖ Year FE" "Obs" "adjusted-R2"))
-    mtitle("High Strategy" "Low Strategy" "High Strategy (Control)" "Low Strategy (Control)");
+    mtitle("High Strategy" "Low Strategy" "High Strategy CT" "Low Strategy CT");
 #delimit cr	
 
-
-/* #delimit ;         
-esttab high_esg low_esg high_esg_ct low_esg_ct	
-    using esg_group_regression.rtf  ,                                	
+#delimit ;         
+esttab state_owned privity_owned state_owned_ct privity_owned_ct	
+    using further-analysis06_equity-nature.rtf  ,                                	
     replace label nogap star(* 0.10 ** 0.05 *** 0.01) 
 	keep($var_list) varwidth(15) b t(4) ar2(4) 
 	s(control fe_industry fe_year fe_province fe_indu_year fe_prov_year N r2_a, 
 	  label("Control Variables" "Industry FE" "Year FE" "Province FE" 
 			"Industry ✖ Year FE" "Province ✖ Year FE" "Obs" "adjusted-R2"))
-    mtitle("High ESG" "Low ESG" "High ESG (Control)" "Low ESG (Control)");
-#delimit cr	 */
-
+    mtitle("State Owned" "Privity Owned" "State Owned CT" "Privity Owned CT");
+#delimit cr	

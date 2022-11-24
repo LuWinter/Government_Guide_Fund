@@ -46,6 +46,11 @@ placebo_data <- merged_for_reg_reduced %>%
     Industry = ifelse(str_sub(IndustryCode, 1, 1) != "C", 
                       str_sub(IndustryCode, 1, 1), 
                       str_sub(IndustryCode, 1, 2))
+  ) %>% 
+  stata(
+    src = "winsor2 Size Lev GDP_p MHRatio Age, cuts(1 99) by(Year) replace", 
+    data.in = .,
+    data.out = TRUE
   )
 
 stata(
@@ -65,7 +70,7 @@ tictoc::tic()
 future_map(
   .x = 1:5000, 
   .f = \(x) {
-    placebo_data$FakeGGF <- rbinom(n = 15642, size = 1, prob = 620/15642)
+    placebo_data$FakeGGF <- rbinom(n = nrow(placebo_data), size = 1, prob = 620/nrow(placebo_data))
     res <- coeftable(feols(
       EPS_P ~ DR*Ret*FakeGGF + DR*Ret*Size + DR*Ret*Lev + DR*Ret*MHRatio + DR*Ret*Age + DR*Ret*GDP_p | 
         Year + Industry + Province + Year^Industry + Year^Province,  
@@ -82,43 +87,48 @@ placebo_result_df <- reduce(
   .x = placebo_result_full, 
   .f = bind_rows
 )
+names(placebo_result_df) <- c("Estimate", "t_value", "p_value")
+placebo_result_df <- placebo_result_df %>% 
+  mutate(
+    norm_t = rnorm(5000, mean(t_value), sd(t_value)),
+    norm_est = rnorm(5000, mean(Estimate), sd(Estimate))
+  )
+
+rio::export(placebo_result_df, "output/placebo-test_2022-11-04.dta")
 
 
 # 2. Plot Output ----------------------------------------------------------
 
 ### t值 
 ggplot(data = placebo_result_df) +
-  geom_density(aes(x = `t value`)) +
+  geom_density(aes(x = t_value)) +
+  geom_density(aes(x = norm_t)) +
   geom_vline(xintercept = 2.08) +
   theme_light()
 
 ### 系数核密度
 ggplot(data = placebo_result_df) +
-  geom_density(aes(x = Estimate)) +
+  geom_density(aes(x = Estimate), linetype = 1) +
+  geom_density(aes(x = norm_est), linetype = 4) +
   geom_vline(xintercept = 0, linetype = 4) +
   geom_vline(xintercept = 0.07385598, linetype = 1) +
+  theme_light() +  
+  labs(x = "Estimate Coeffcient", y = "Density")
+
+estimate_long <- tibble(
+  n = 1:5000,
+  `Placebo Test` = placebo_result_df$Estimate,
+  `Normal Distribution` = placebo_result_df$norm_est
+) %>% 
+  tidyr::pivot_longer(
+    cols = c("Placebo Test", "Normal Distribution"),
+    names_to = "LineType"
+  )
+ggplot(data = estimate_long, group = LineType) +
+  geom_density(aes(x = value, linetype = LineType), adjust = 2.5) +
+  geom_vline(xintercept = 0, linetype = 9) +
+  geom_vline(xintercept = 0.07385598, linetype = 4, show.legend = T) +
   theme_light() +
   labs(x = "Estimate Coeffcient", y = "Density")
 
-### 
-ggplot(data = placebo_result_df) +
-  geom_point(aes(x = Estimate, y = `Pr(>|t|)`), shape = 20) +
-  geom_hline(yintercept = 0.05, linetype = 4) +
-  theme_light() +
-  labs(x = "Estimate Coeffcient", y = "P Value")
-
-merged_for_reg_reduced %>% 
-  mutate(Year = Year + 1) %>% 
-  group_by(Year) %>% 
-  summarise(
-    n = sum(GGF), 
-    r = n / n(),
-    min = 0.02
-  ) %>% 
-  mutate(Year = factor(Year)) %>% 
-  e_charts(x = Year) %>% 
-  e_bar(serie = n, legend = FALSE) %>% 
-  e_line(serie = r, legend = FALSE, y_index = 1) %>% 
-  e_line(serie = min, legend = FALSE, y_index = 1)
-
-
+dbDisconnect(con_sqlite)

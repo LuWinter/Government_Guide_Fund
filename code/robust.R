@@ -123,5 +123,5 @@ stata(
   data.in = filter(test_C_score, Year >= 2016)
 )
 
-
+dbDisconnect(con_sqlite)
 
